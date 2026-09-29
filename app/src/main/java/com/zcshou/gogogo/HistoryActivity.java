@@ -175,8 +175,19 @@ public class HistoryActivity extends BaseActivity {
     private void recordArchive() {
         double limits;
         try {
-            limits = Double.parseDouble(sharedPreferences.getString("setting_pos_history", getResources().getString(R.string.history_expiration)));
-        } catch (NumberFormatException e) {  // GOOD: The exception is caught.
+            // 修复键名不匹配（数据最小化 / 隐私控制）：
+            // 历史版本读取的是 "setting_pos_history"，但设置界面写入的键是
+            // "setting_history_expiration"（见 preferences_main.xml 与
+            // FragmentSettings）。由于没有任何代码写入 setting_pos_history，
+            // 该处总是取默认值，用户设置的「历史记录有效期」完全无效 ——
+            // 位置轨迹会被保留超过用户设定的期限。
+            limits = Double.parseDouble(sharedPreferences.getString("setting_history_expiration",
+                    getResources().getString(R.string.history_expiration)));
+        } catch (NumberFormatException e) {
+            limits = 7;
+        }
+        // 防御：非法值（负数/NaN/过大）会导致记录永不过期或立即被清空
+        if (!(limits > 0) || Double.isNaN(limits) || Double.isInfinite(limits)) {
             limits = 7;
         }
         final long weekSecond = (long) (limits * 24 * 60 * 60);
