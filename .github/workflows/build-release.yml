@@ -124,6 +124,43 @@ jobs:
           } > release-notes.md
           cat release-notes.md
 
+      - name: Generate build provenance (in-toto / SLSA-style)
+        env:
+          GOGOGO_KEYSTORE_FILE: ${{ runner.temp }}/release.p12
+          GOGOGO_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cd "${APK_DIR}"
+          APK_SHA=$(cut -d' ' -f1 "${APK_NAME}.sha256")
+
+          # 生成 in-toto Statement / SLSA provenance v1 形式的本体。
+          #
+          # 实现说明：不使用 heredoc —— YAML run 块的内容带有缩进，而 <<EOF 的
+          # 结束标记必须顶格（<<-EOF 只剥离制表符、不剥离空格），否则 shell 会
+          # 一直读到文件结尾。改用仓库内的 Node 脚本，同时避免 jq 这类依赖
+          # runner 预装工具的假设。
+          #
+          # 局限：本证明由发布签名密钥签署，属「同一信任根的自证」，强度低于
+          # 独立的 Sigstore keyless 签名或云 KMS 身份证明。其价值在于把
+          # 「源码提交 → 构建参数 → 制品哈希」绑定为不可单独篡改的一组记录。
+          STARTED_ON=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+          APK_NAME="${APK_NAME}" \
+          APK_SHA="${APK_SHA}" \
+          node scripts/gen-provenance.mjs > provenance.json
+
+          node -e 'const d=require("./provenance.json"); if(!d.subject?.[0]?.digest?.sha256) { console.error("provenance 结构校验失败"); process.exit(1); } console.log("provenance 结构校验通过");'
+
+          # 用发布密钥签名 provenance（先签名，再复制，避免自证被篡改）
+          openssl pkcs12 -in "${GOGOGO_KEYSTORE_FILE}" \
+            -passin env:GOGOGO_KEYSTORE_PASSWORD \
+            -nocerts -nodes -out "${RUNNER_TEMP}/provenance-key.pem" 2>/dev/null
+          openssl dgst -sha256 -sign "${RUNNER_TEMP}/provenance-key.pem" \
+            -out provenance.json.sig provenance.json
+          rm -f "${RUNNER_TEMP}/provenance-key.pem"
+
+          echo "provenance.json 与 .sig 已生成："
+          ls -la provenance.json provenance.json.sig
+
       - name: Upload signed APK
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
@@ -132,12 +169,15 @@ jobs:
             app/build/outputs/apk/release/*.apk
             app/build/outputs/apk/release/*.sha256
             app/build/outputs/apk/release/release-notes.md
+            app/build/outputs/apk/release/provenance.json
+            app/build/outputs/apk/release/provenance.json.sig
           retention-days: 30
           if-no-files-found: error
 
       - name: Clear signing material
         if: always()
-        run: rm -f "${RUNNER_TEMP}/release.p12" local.properties || true
+        run: |
+          rm -f "${RUNNER_TEMP}/release.p12" "${RUNNER_TEMP}/provenance-key.pem" local.properties || true
 
   # ---------------------------------------------------------------------------
   # 发布。仅此作业需要 contents: write。
@@ -173,3 +213,5 @@ jobs:
           files: |
             dist/*.apk
             dist/*.sha256
+            dist/provenance.json
+            dist/provenance.json.sig

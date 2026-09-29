@@ -32,6 +32,40 @@
 
 ---
 
+## 1.1 目标条款达成情况
+
+| 目标条款 | 状态 | 证据 |
+|---|---|---|
+| 以全新签名身份取代已公开泄露的旧密钥 | ✅ | `scripts/generate-signing-key.sh`（已实测：生成 → 校验 → 错误口令被 MAC 拒绝）；旧密钥未被复用 |
+| 全历史零密钥泄露 | ✅ | `git log --all --name-only` 密钥类文件命中数 = 0 |
+| Actions 全量 SHA 固定 | ✅ | 19/19 `uses:` 为 40 位 SHA，逐个经 GitHub API 核验 |
+| 发布走受保护 Environment 审批 | ✅ | `build-release.yml` 两处 `environment: production` |
+| 最小权限 token | ✅ | 全部 workflow 顶层 `contents: read`；写权限仅 `publish` 作业 |
+| 制品签名 | ✅ | 发布生成 `.sha256` + 签名证书指纹；客户端 `UpdateVerifier` 强制校验 SHA-256 与签名证书 |
+| 可验证来源（provenance） | ⚠️ 已实现但有限 | `scripts/gen-provenance.mjs` + 签名步骤（已实测签署/验证/篡改检测）；**局限**：与 APK 同一信任根，属自证，未达 SLSA 独立证明强度 |
+| 第一性原理 + 对抗性审查 | ✅ | 见下方「对抗性审查记录」 |
+| 可直接发布的仓库 | ❌ 未达成 | 无 JDK 编译验证；签名 Secret 未配置；尚未推送 |
+
+### 对抗性审查记录（自查并修复的缺陷）
+
+| # | 自查发现 | 修复 |
+|---|---|---|
+| 1 | 资产名用**本地**版本号拼接，永远匹配不上新版本资产（更新功能静默失效） | 改为从 release `tag_name` 推导 |
+| 2 | `mUpdateFilename` 参与 `new File(dir,name)`，存在路径穿越面 | 新增 `isSafeAssetFileName()` |
+| 3 | 误以为 `-assumenosideeffects` 能阻止日志落盘（它不消除参数求值副作用） | 改为代码级控制：关闭时不挂载 printer |
+| 4 | 我写的 `fullBackupContent="false"` 在 API<31 需资源引用，会导致构建失败 | 删除该属性（`allowBackup="false"` 已足够） |
+| 5 | 策略校验器把 `secrets.GITHUB_TOKEN` 误判为签名凭据（正则含 `KEY_STORE`） | 改用精确 Secret 名匹配 |
+| 6 | 校验器 R6 规则检测 indent 0，而 `contents: write` 嵌套于顶层 `permissions:` 之下，规则永不触发 | 改为跟踪 `permissions:` 块缩进 |
+| 7 | 校验器 `inJobsBlock` 在顶层判断前被置位，导致 `jobs:` 之后的顶层键被误判 | 判定顺序修正 |
+| 8 | 我手写的 PKCS#12 KDF 实现对字节偏移处理错误，得出「旧口令无效」的错误结论 | 用 `node-forge` 独立复核，修正结论并撤回错误判断 |
+| 9 | workflow 内 heredoc 的 `EOF` 带 10 空格缩进，shell 永不识别结束标记 | 改用仓库内 Node 脚本，去除 heredoc |
+| 10 | 审计对照表中 `setting_pos_history` 键名不匹配（PII 保留期控制失效） | 修正为 `setting_history_expiration` 并加非法值防御 |
+| 11 | 上稿引用 `jq`，但未验证 runner 是否预装 | 改用 Node（CI 由 setup-node 保证） |
+| 12 | 同样未验证 `actions/setup-node` 的 SHA 就写入初稿 | 经 API 核验后才使用 |
+| 13 | gitleaks 的 SHA-256 初稿为我臆造值 | 取该 release 的 asset digest 后修正 |
+
+---
+
 ## 2. 额外发现（审计报告未覆盖，本轮新增整改）
 
 | 问题 | 性质 | 证据 | 整改 |

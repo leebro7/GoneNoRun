@@ -61,6 +61,33 @@
 | 依赖校验元数据与锁定 | `build.gradle` 的 `dependencyVerification` / `dependencyLocking` | 元数据需维护者本地生成后提交（本环境无 JDK） |
 | Gradle 发行版哈希 | `gradle/wrapper/gradle-wrapper.properties` 的 `distributionSha256Sum` | 取自 services.gradle.org 官方校验文件 |
 | 策略即代码 | `scripts/check-workflow-policy.mjs` + 对抗性测试 | R1–R7 不变量，9 个负向用例全部通过 |
+| 发布来源证明 | `scripts/gen-provenance.mjs` + `build-release.yml` 的签署步骤 | 生成 in-toto Statement / SLSA provenance v1 形式本体，覆盖源码提交、构建参数、制品 SHA-256、builder 与 invocation id，用发布密钥签名后随 Release 发布。**局限**：与 APK 同一信任根，属自证，不等同于 Sigstore keyless 或独立 KMS 证明。验证方法见 §2.5 |
+
+### 2.5 验证发布来源证明
+
+```bash
+# 1) 取回 provenance、其签名与发布证书
+curl -LO <release>/provenance.json
+curl -LO <release>/provenance.json.sig
+
+# 2) 核验证明本体未被篡改
+openssl x509 -in release.cert.pem -pubkey -noout > pub.pem
+openssl dgst -sha256 -verify pub.pem -signature provenance.json.sig provenance.json
+#   期望输出：Verified OK
+
+# 3) 核验证明中登记的 APK 哈希与实际下载的 APK 一致
+DECLARED=$(node -e 'console.log(require("./provenance.json").subject[0].digest.sha256)')
+ACTUAL=$(sha256sum Go_<ver>_arm64-v8a_release.apk | cut -d' ' -f1)
+[ "$DECLARED" = "$ACTUAL" ] && echo MATCH || echo "MISMATCH — 制品与证明不符，拒绝使用"
+
+# 4) 核验源码提交与构建参数
+node -e 'const p=require("./provenance.json").predicate;
+  console.log("source :", p.buildDefinition.resolvedDependencies[0].uri);
+  console.log("params :", JSON.stringify(p.buildDefinition.externalParameters));
+  console.log("builder:", p.runDetails.builder.id);'
+```
+
+已实测的负向验证：改动 APK 内容后，第 3 步哈希比对必然失配 —— 证明确实绑定了制品。
 
 ### 2.3 应用运行时（对应原则 1/3/4/8）
 
