@@ -1,0 +1,30 @@
+# CODEOWNERS — 关键路径的强制审查人（零信任原则 6：强身份）
+
+# 说明：
+#   * 本文件使 GitHub 能够对敏感路径要求特定审查人。
+#     「要求 CODEOWNERS 审查」需在分支保护规则中同时启用。
+#   * 请将 @ZCShou 替换为真实的维护者账号，并至少配置一名第二审查人，
+#     以避免单点（原则 2：限制爆炸半径）。
+
+# 默认：所有变更需维护者审查
+*                                   @ZCShou
+
+# 发布链路与签名配置 —— 最高敏感级别
+/.github/workflows/                 @ZCShou
+/app/build.gradle                   @ZCShou
+/gradle/                            @ZCShou
+/scripts/generate-signing-key.sh    @ZCShou
+/.gitleaks.toml                     @ZCShou
+
+# 权限与网络策略 —— 直接影响设备侧安全边界
+/app/src/main/AndroidManifest.xml   @ZCShou
+/app/src/main/res/xml/network_security_config.xml @ZCShou
+/app/src/main/res/xml/provider_paths.xml          @ZCShou
+/app/src/main/res/xml/data_extraction_rules.xml   @ZCShou
+
+# 自更新与完整性校验逻辑
+/app/src/main/java/com/zcshou/gogogo/UpdateVerifier.java @ZCShou
+/app/src/main/java/com/zcshou/gogogo/MainActivity.java   @ZCShou
+
+# vendored 二进制依赖与其白名单
+/app/libs/                          @ZCShou

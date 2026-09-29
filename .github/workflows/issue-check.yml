@@ -1,0 +1,109 @@
+name: Issue Check
+
+# 每日检查长期无响应的 issue 并打标/关闭。
+#
+# 零信任要点：
+#   * 原实现使用 actions-cool/issues-helper@v3（可变 tag，且其仓库当前无法
+#     通过 API 取得 SHA 以完成固定）。此处改用固定 SHA 的官方
+#     actions/github-script，消除对无法固定版本的第三方 Action 的依赖。
+#   * 权限最小化：仅在需要的作业上声明 issues/pull-requests 写权限。
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  issue-close-inactive:
+    name: Close inactive issues
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Mark inactive issues (15 days without update)
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const INACTIVE_LABEL = 'inactive';
+            const DAYS = 15;
+            const cutoff = new Date(Date.now() - DAYS * 24 * 60 * 60 * 1000);
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              sort: 'updated',
+              direction: 'asc',
+              per_page: 100,
+            });
+
+            for (const issue of issues) {
+              if (issue.pull_request) continue;
+              const labels = (issue.labels || []).map((l) => (typeof l === 'string' ? l : l.name));
+              if (labels.includes(INACTIVE_LABEL)) continue;
+              if (new Date(issue.updated_at) >= cutoff) continue;
+
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: [INACTIVE_LABEL],
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: [
+                  `The issue has not received any updates for ${DAYS} consecutive days. Please follow the progress of this issue in time.`,
+                  '',
+                  `该 issue 已经连续 ${DAYS} 天未收到任何更新。请及时关注该 ISSUE 进展。`,
+                ].join('\n'),
+              });
+              core.info(`Labeled + commented issue #${issue.number}`);
+            }
+
+      - name: Close issues inactive for 7 more days
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const INACTIVE_LABEL = 'inactive';
+            const DAYS = 7;
+            const cutoff = new Date(Date.now() - DAYS * 24 * 60 * 60 * 1000);
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: INACTIVE_LABEL,
+              sort: 'updated',
+              direction: 'asc',
+              per_page: 100,
+            });
+
+            for (const issue of issues) {
+              if (issue.pull_request) continue;
+              if (new Date(issue.updated_at) >= cutoff) continue;
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: [
+                  'Since the issue did not receive a response within 7 days after being labeled inactive, it will now be closed. If you have any questions, you can comment and reply.',
+                  '',
+                  '由于该 issue 在被标记为 inactive 后 7 天仍未收到回应，现关闭该 issue。若有任何问题，可评论回复。',
+                ].join('\n'),
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+                state_reason: 'not_planned',
+              });
+              core.info(`Closed issue #${issue.number}`);
+            }

@@ -1,0 +1,93 @@
+name: Issue Comment
+
+# 根据 issue 标签自动回复。
+#
+# 零信任要点：
+#   * 原实现使用 actions-cool/issues-helper@v3（可变 tag，且其仓库当前无法
+#     通过 API 取得 SHA 以完成固定）。改用固定 SHA 的官方 actions/github-script。
+#   * 权限最小化：contents 只读，仅按需声明 issues/pull-requests 写权限。
+#   * 回复正文只使用 issue 编号与用户登录名，不引入可被注入的任意文本。
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  issue-labeled:
+    name: Reply on label
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Comment or close based on label
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const label = context.payload.label && context.payload.label.name;
+            const issue = context.payload.issue;
+            const user = issue.user.login;
+
+            const templates = {
+              feature: [
+                `Hello @${user}, thanks for your suggestions. We will have someone to follow up your suggestions.`,
+                '',
+                `你好 @${user}，感谢提交建议！我们会有专人来跟踪你的建议。`,
+              ],
+              bug: [
+                `Hello @${user}, thanks for your feedback. We will have someone to follow up your feedback.`,
+                '',
+                `你好 @${user}，感谢提交反馈！我们会有专人来跟踪你的反馈。`,
+              ],
+              'help wanted': [
+                `Sorry @${user}, we do not have a good solution now. Welcome to [send us a Pull Request](https://help.github.com/en/articles/creating-a-pull-request) for it. Make sure CI passed, we will review it soon. We appreciate your effort in advance and looking forward to your contribution!`,
+                '',
+                `抱歉 @${user}，目前我们并没有很好的解决方法！欢迎直接在此仓库 [创建一个 Pull Request](https://help.github.com/en/articles/creating-a-pull-request) 来帮助我们改进，确保 CI 通过后我们会尽快 Review。提前感谢并期待您的贡献！`,
+              ],
+              reproduce: [
+                `Hello @${user}, we can not reproduce your feedback. Please provide a reproduction in order to address the issue.`,
+                '',
+                `你好 @${user}，我们未能复现你的反馈。请提供复现步骤以便于我们排查。`,
+              ],
+              usage: [
+                `Hello @${user}, thanks for using GoGoGo. It is recommended that you first check whether the corresponding document can solve your feedback.`,
+                '',
+                `你好 @${user}，感谢使用影梭。建议你首先查看对应文档是否可以解决你的反馈。`,
+              ],
+              question: [
+                `Hello @${user}, thanks for using GoGoGo. It is recommended that you first check whether the corresponding document can solve your feedback.`,
+                '',
+                `你好 @${user}，感谢使用影梭。建议你首先查看对应文档是否可以解决你的反馈。`,
+              ],
+              invalid: [
+                `Hello @${user}, your issue has been closed because it does not conform to our issue requirements. Please use the issue template to create an issue, thank you!`,
+                '',
+                `你好 @${user}，为了能够进行高效沟通，我们对 issue 有一定的格式要求。你的 issue 因为不符合要求而被自动关闭，请务必根据 issue 模板创建 issue，谢谢！`,
+              ],
+            };
+
+            const body = templates[label];
+            if (!body) {
+              core.info(`No template for label "${label}", nothing to do.`);
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: body.join('\n'),
+            });
+
+            if (label === 'invalid') {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+                state_reason: 'not_planned',
+              });
+            }

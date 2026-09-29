@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置（零信任原则 1：永不信任网络；原则 8：端到端加密）
+
+  默认策略：禁止明文流量、仅信任系统 CA。
+
+  说明：本应用本身的所有请求（api.map.baidu.com / api.github.com）均为 HTTPS。
+  但百度地图/定位 SDK 在部分定位辅助场景下会向自有域名发起 HTTP（非 TLS）
+  请求。为使 SDK 在禁止全局明文的前提下仍可工作，此处仅对百度自有域名开放
+  明文例外，其余一律拒绝。
+
+  若未来 SDK 升级为全 HTTPS，应删除 <domain-config cleartextTrafficPermitted="true">
+  整段，实现全局 cleartextTrafficPermitted="false"。
+-->
+<network-security-config>
+
+    <!-- 全局默认：禁止明文，仅信任系统 CA -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!--
+      百度 SDK 明文例外（最小化范围）
+
+      仅放开百度地图/定位自有域名，且不包含任何用户凭据。若能在测试中发现
+      具体域名可进一步收窄，应继续收窄或移除。
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">baidu.com</domain>
+        <domain includeSubdomains="true">bdstatic.com</domain>
+    </domain-config>
+
+    <!--
+      更新链路：强制 TLS
+
+      此处仅声明信任系统 CA。证书固定（pin-set）需在掌握实际 SPKI 指纹后
+      再启用——切勿填入占位值，否则会直接阻断更新检查。
+
+      启用步骤（见 docs/SECURITY-HARDENING.md）：
+        1. openssl s_client -connect api.github.com:443 -servername api.github.com </dev/null 2>/dev/null \
+             | openssl x509 -pubkey -noout \
+             | openssl pkey -pubin -outform der \
+             | openssl dgst -sha256 -binary | openssl enc -base64
+        2. 至少配置两个 pin（当前证书 + 备份 CA），并设置 expiration
+        3. 在灰度环境验证后再全量发布
+    -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">github.com</domain>
+        <domain includeSubdomains="true">githubusercontent.com</domain>
+        <domain includeSubdomains="true">api.map.baidu.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+    <!--
+      调试构建专用：允许用户 CA，便于本地抓包分析。
+      该配置仅在 debuggable 构建中生效，release 构建不包含。
+    -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+
+</network-security-config>

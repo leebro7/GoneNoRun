@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      权限最小化（零信任原则 3）
+
+      本清单经过权限审计，仅保留功能所必需的声明。相对于历史版本，已移除以下
+      声明（原因见每项注释）：
+
+        ACCESS_BACKGROUND_LOCATION  —— 后台定位。核心定位由前景服务持有，
+                                        不再需要后台定位范围
+        READ_PHONE_STATE            —— 代码中从未使用（旧版 WelcomeActivity 仅申请未使用）
+        READ_EXTERNAL_STORAGE       —— 日志改写入应用内部存储后不再需要
+        DOWNLOAD_WITHOUT_NOTIFICATION —— 非必要，更新下载应可见
+        REPLACE_EXISTING_PACKAGE    —— 并非有效的 Android 权限常量，且从未使用
+        MOUNT_UNMOUNT_FILESYSTEMS   —— signature|privileged 权限，普通应用不可获得
+        READ_LOGS                   —— signature|privileged 权限，普通应用不可获得
+        WRITE_SETTINGS              —— 特权系统设置写入，功能上完全不需要
+        ACCESS_MOCK_LOCATION        —— 见下方 mock location 说明
+        CHANGE_WIFI_STATE           —— 应用只提示用户关闭 Wi-Fi，不自行修改
+        WAKE_LOCK                   —— 代码中无 PowerManager 使用
+
+      允许的全部权限均为 normal 或 dangerous（用户可见可撤销），
+      不再申请任何 signature|privileged 权限，因此 tools:ignore="ProtectedPermissions"
+      也不再需要。
+    -->
+
+    <!-- 仅使用期间（前景）精确/粗略定位。核心功能必需。 -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- 读取网络/运营商 CellID 以辅助定位（普通权限） -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- 前台服务：维持模拟定位持续运行并展示常驻通知 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- 摇杆悬浮窗（核心交互） -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- 应用内自更新：下载并调起系统安装器 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- 悬浮窗振动反馈 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- 网络：地图与逆地理编码、更新检查 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:name=".GoApplication"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:launchMode="singleInstance"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:networkSecurityConfig="@xml/network_security_config"
+        tools:targetApi="31">
+
+        <uses-library
+            android:name="org.apache.http.legacy"
+            android:required="false" />
+
+        <!-- 百度地图 间隔定位必须配置此 service 否则功能无效 -->
+        <service
+            android:name="com.baidu.location.f"
+            android:enabled="true"
+            android:exported="false"
+            android:process=":remote" />
+
+        <service
+            android:exported="false"
+            android:foregroundServiceType="location"
+            android:name="com.zcshou.service.ServiceGo" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileProvider"
+            android:grantUriPermissions="true"
+            android:exported="false">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/provider_paths" />
+        </provider>
+
+        <activity
+            android:name=".WelcomeActivity"
+            android:exported="true"
+            android:theme="@style/AppTheme.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:launchMode="singleInstance"
+            android:exported="false"
+            android:theme="@style/AppTheme.NoActionBar" />
+
+        <activity
+            android:name=".SettingsActivity"
+            android:label="@string/app_settings"
+            android:exported="false" />
+
+        <activity
+            android:name=".HistoryActivity"
+            android:label="@string/app_history"
+            android:exported="false" />
+
+    </application>
+
+    <!--
+      ==========================================================================
+      关于 ACCESS_MOCK_LOCATION（需在真机验证后决定是否加回）
+      ==========================================================================
+      android.permission.ACCESS_MOCK_LOCATION 是 signature|privileged 权限，
+      普通应用无法持有，且从未出现在运行时权限对话框中。
+
+      模拟定位的实际授权路径是：开发人员选项 →「选择模拟位置信息应用」，
+      该操作使系统允许本应用调用 LocationManager.addTestProvider()。
+
+      历史版本的实现依赖后一条路径（GoUtils.isAllowMockLocation 通过捕获
+      SecurityException 探测），因此本清单不再声明 ACCESS_MOCK_LOCATION。
+
+      验证要求：请在 Android 8.0 / 10 / 13 真机上确认「选择模拟位置信息应用」
+      列表中仍能看到本应用、且模拟定位功能正常。若某版本无法授权，则需在本
+      清单加回该声明并在此处记录原因与验证结果。
+    -->
+
+</manifest>

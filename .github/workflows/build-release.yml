@@ -1,0 +1,175 @@
+name: Build Release
+
+# 触发条件：
+#   - 手动触发
+#   - 推送 v* 形式的 tag（不再使用 '*' 通配，避免任意 tag 触发发布）
+#
+# 零信任要点（对应审计发现 F-02 / F-03）：
+#   1. 发布作业绑定 GitHub Environment（production），须经人工审批才会执行，
+#      未批准时签名凭据不会被注入。
+#   2. 顶层权限只读；写权限仅下沉到 publish 作业。
+#   3. 所有 Action 固定到 commit SHA。
+#   4. 签名由 Gradle 一次完成，不再「先用仓库内 keystore 签一次、再由第三方
+#      Action 签一次」（历史版本的双重签名反模式）。
+#   5. 生成 SHA-256 校验值并写入 Release 正文，供客户端自更新强制校验。
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 构建并签名。此作业持有签名凭据，因此绑定受保护 Environment。
+  # ---------------------------------------------------------------------------
+  build-and-sign:
+    name: Build & Sign Release APK
+    runs-on: ubuntu-latest
+    # 需在仓库 Settings → Environments 中为 production 配置 required reviewers
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@9704b39bf258b59bc04b50fa2dd55e9ed76b47a8 # v4.1.0
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # 从 Environment Secret 还原签名密钥库到 runner 临时目录。
+      # 该文件随 runner 销毁，绝不进入仓库、缓存或 artifact。
+      - name: Materialize signing keystore
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SIGNING_KEYSTORE_BASE64}" ]; then
+            echo "::error::未配置 SIGNING_KEYSTORE_BASE64，拒绝以未签名方式发布"
+            exit 1
+          fi
+          install -m 600 /dev/null "${RUNNER_TEMP}/release.p12"
+          printf '%s' "${SIGNING_KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/release.p12"
+
+      - name: Record signing certificate fingerprint
+        env:
+          GOGOGO_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          GOGOGO_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          keytool -list -v \
+            -keystore "${RUNNER_TEMP}/release.p12" \
+            -storepass "${GOGOGO_KEYSTORE_PASSWORD}" \
+            -alias "${GOGOGO_KEY_ALIAS}" \
+            -storetype PKCS12 > "${RUNNER_TEMP}/keystore-info.txt"
+          echo "### 签名证书指纹" >> "$GITHUB_STEP_SUMMARY"
+          grep -E 'SHA256:|Alias name' "${RUNNER_TEMP}/keystore-info.txt" >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Build release (signed once by Gradle)
+        env:
+          GOGOGO_KEYSTORE_FILE: ${{ runner.temp }}/release.p12
+          GOGOGO_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          GOGOGO_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          GOGOGO_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
+          MAPS_SAFE_CODE: ${{ secrets.MAPS_SAFE_CODE }}
+        run: |
+          set -euo pipefail
+          # secrets-gradle-plugin 从 local.properties 读取地图 Key
+          printf 'MAPS_API_KEY=%s\nMAPS_SAFE_CODE=%s\n' "${MAPS_API_KEY}" "${MAPS_SAFE_CODE}" > local.properties
+          chmod 600 local.properties
+          ./gradlew assembleRelease --stacktrace
+
+      - name: Assert APK is signed
+        run: |
+          set -euo pipefail
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -n1)
+          echo "APK_DIR=$(dirname "${APK}")" >> "$GITHUB_ENV"
+          echo "APK_NAME=$(basename "${APK}")" >> "$GITHUB_ENV"
+          APKSIGNER=$(ls "${ANDROID_HOME}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n1)
+          "${APKSIGNER}" verify --verbose --print-certs "${APK}" > "${RUNNER_TEMP}/apksigner.txt"
+          cat "${RUNNER_TEMP}/apksigner.txt"
+          grep -q 'Verified' "${RUNNER_TEMP}/apksigner.txt" || { echo "::error::APK 签名校验失败"; exit 1; }
+
+      - name: Generate checksums and release notes
+        run: |
+          set -euo pipefail
+          cd "${APK_DIR}"
+          sha256sum "${APK_NAME}" > "${APK_NAME}.sha256"
+          SUM=$(cut -d' ' -f1 "${APK_NAME}.sha256")
+          CERT=$(grep -m1 -i 'certificate SHA-256 digest' "${RUNNER_TEMP}/apksigner.txt" | sed 's/.*digest: //' || true)
+          {
+            echo "## 下载与校验"
+            echo
+            echo "APK：\`${APK_NAME}\`"
+            echo
+            echo '```'
+            echo "SHA-256: ${SUM}"
+            echo '```'
+            echo
+            echo "签名证书 SHA-256：\`${CERT}\`"
+            echo
+            echo "应用内自更新会强制校验 APK 的 SHA-256 与签名证书，任一不符即中止安装。"
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Upload signed APK
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: release-apk
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/release/*.sha256
+            app/build/outputs/apk/release/release-notes.md
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Clear signing material
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/release.p12" local.properties || true
+
+  # ---------------------------------------------------------------------------
+  # 发布。仅此作业需要 contents: write。
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish GitHub Release
+    needs: build-and-sign
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+    steps:
+      - name: Download signed artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: release-apk
+          path: dist
+
+      - name: Find release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          NOTES=$(find dist -name 'release-notes.md' | head -n1)
+          if [ -z "${NOTES}" ]; then echo "::error::缺少 release-notes.md"; exit 1; fi
+          echo "path=${NOTES}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@6da8fa9354ddfdc4aeace5fc48d7f679b5214090 # v2.4.1
+        with:
+          draft: true          # 先生成草稿，人工复核校验值后再公开
+          prerelease: false
+          body_path: ${{ steps.notes.outputs.path }}
+          files: |
+            dist/*.apk
+            dist/*.sha256

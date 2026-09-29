@@ -1,0 +1,14 @@
+# vendored 二进制依赖 SHA-256 白名单
+# 由 scripts/gen-vendored-checksums.sh 生成，请勿手工编辑
+# 更新依赖时必须重新生成并在 PR 中说明来源与版本
+#
+# 已知来源：百度 LBS Android SDK（BaiduLBS_Android.jar / libBaiduMapSDK_*_v7_6_5.so）
+# 注意：该 SDK 无可用的坐标与版本清单，无法纳入 osv-scanner 等 SCA 工具，
+#       需依赖人工跟踪其安全公告。
+093c4e2aa59bf818af13ef63a591a47c192b3a0cfaa7868b531410701b240245  BaiduLBS_Android.jar
+8cc09917a8e333fde2a7d4ebf74e451d0419a09ede1acfe610c659becbe43c62  arm64-v8a/libBaiduMapSDK_base_v7_6_5.so
+2079d79650202e4d4250697c1f84b3a10ebf9ae7a1be09026187116123923c8c  arm64-v8a/libBaiduMapSDK_map_v7_6_5.so
+9ee5e2dd1e2b1530257367d49bfbaecfa6d3f79e2f3b67ac956347f58ab000a6  arm64-v8a/libc++_shared.so
+71e059853664154dc559ced2069eb189fe9ce24ea944e8fc8dcbcaa6d9f22024  arm64-v8a/libindoor.so
+71da5bf9f1dcae677ec4a3d0d9ad14ea99b5e77a19c025ff23ba6d4e325efcdb  arm64-v8a/liblocSDK8b.so
+0ef33802c6615a7ee49e1f429270b0e7d2c1a8d02db5282d470454b1e574c383  arm64-v8a/libtiny_magic.so

@@ -1,0 +1,58 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.12.1'
+        // 谷歌官方推荐的用于隐藏地图 KEY 的插件
+        // https://developers.google.com/maps/documentation/places/android-sdk/secrets-gradle-plugin
+        classpath("com.google.android.libraries.mapsplatform.secrets-gradle-plugin:secrets-gradle-plugin:2.0.1")
+
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    // -----------------------------------------------------------------------
+    // 依赖校验与锁定（F-04）
+    //
+    // 依赖校验元数据在 CI 中强制开启，本地可通过
+    //   -Pgogogo.verifyDependencies=true
+    // 启用同一策略，避免 CI 与本地行为不一致。
+    // 元数据文件：gradle/verification-metadata.xml（由维护者执行
+    //   ./gradlew --write-verification-metadata sha256 help
+    // 生成并提交，需人工审查 diff）
+    // -----------------------------------------------------------------------
+    dependencyVerification {
+        verifyMetadata = providers.gradleProperty('gogogo.verifyDependencies')
+                .map { it.toBoolean() }
+                .getOrElse(false)
+    }
+
+    // 依赖锁定，确保可重现构建
+    dependencyLocking {
+        lockAllConfigurations()
+    }
+
+    gradle.projectsEvaluated {
+        tasks.withType(JavaCompile).tap {
+            configureEach { // 用于显示过时 API 的详细信息
+                options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+            }
+        }
+    }
+}
+
+tasks.register('clean', Delete) {
+    delete rootProject.layout.buildDirectory
+}

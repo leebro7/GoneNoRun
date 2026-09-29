@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 路径范围（零信任原则 3：最小权限）
+
+  历史版本曾包含 <external-path name="external" path="." /> —— 即把整个外部
+  存储根目录纳入 FileProvider 命名空间，并存在重复的 name="cache" 声明。
+  现仅保留功能真正需要的两个子目录：
+
+    files/Logs/     反馈时分享的日志（已改为应用内部存储）
+    files/Updates/  自更新下载的 APK
+
+  新增路径前请先确认必要性；禁止使用 path="." 或 <root-path />。
+-->
+<paths>
+    <!-- 应用内部文件目录下的日志（context.getFilesDir()/Logs） -->
+    <files-path name="logs" path="Logs/" />
+
+    <!-- 应用内部文件目录下的更新包（context.getFilesDir()/Updates） -->
+    <files-path name="updates" path="Updates/" />
+</paths>

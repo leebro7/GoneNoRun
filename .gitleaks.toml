@@ -1,0 +1,54 @@
+# gitleaks 配置
+#
+# 目的：在 CI 与本地 pre-commit 中阻止密钥材料进入仓库。
+# 历史教训：旧仓库曾把发布签名密钥库（PKCS#12）与硬编码口令一起公开提交。
+#
+# 用法：
+#   gitleaks detect --source . --log-opts="--all" --config .gitleaks.toml --redact
+#
+title = "GoGoGo secret detection policy"
+
+[extend]
+# 继承 gitleaks 内置规则集（AWS/GitHub/Slack/私钥 等）
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# 项目特有规则
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "android-keystore-file"
+description = "Android 签名密钥库内容被提交（PKCS#12 / JKS / BKS）"
+# PKCS#12 的 DER 头：SEQUENCE + OID 1.2.840.113549.1.12.1 (pkcs7-data)
+regex = '''(?i)(MII[A-Za-z0-9+/]{20,}|3082[0-9a-f]{4}0201)'''
+entropy = 3.5
+keywords = ["keystore", "jks", "p12", "pkcs12"]
+[rules.allowlist]
+paths = ['''gradle/wrapper/gradle-wrapper.jar''']
+
+[[rules]]
+id = "gogogo-hardcoded-signing-password"
+description = "签名口令被硬编码在构建脚本中"
+# 明确匹配旧仓库出现过的模式，避免再次引入
+regex = '''(?i)(storePassword|keyPassword)\s*['"][^'"]{3,}['"]'''
+paths = ['''\.gradle$''', '''\.gradle\.kts$''', '''gradle\.properties$''']
+
+[[rules]]
+id = "gogogo-map-api-key-assignment"
+description = "地图 API Key 被硬编码（应仅来自 Secret/环境变量）"
+regex = '''(?i)(maps_api_key|maps_safe_code)\s*[=:]\s*['"]?[A-Za-z0-9]{16,}'''
+paths = ['''local\.properties$''', '''\.gradle$''', '''\.java$''', '''\.xml$''']
+
+# ---------------------------------------------------------------------------
+# 全局允许清单：这些路径本来就不应包含真实密钥
+# ---------------------------------------------------------------------------
+[allowlist]
+description = "已知安全路径"
+paths = [
+  '''\.gitleaks\.toml$''',
+  '''scripts/generate-signing-key\.sh$''',
+  '''docs/SECURITY-HARDENING\.md$''',
+  '''gradle/verification-metadata\.xml$''',
+  '''app/libs/VENDORED_DEPENDENCIES\.sha256$''',
+]
+# CI 中若需容忍特定历史提交，请显式列出 commit 并附原因，禁止使用通配
+commits = []
