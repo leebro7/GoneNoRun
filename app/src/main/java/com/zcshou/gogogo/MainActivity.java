@@ -1293,7 +1293,9 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
      *     SHA-256: <64 位十六进制>
      * 未提供则返回 null，调用方必须据此拒绝更新（默认拒绝）。
      */
-    private static String parseSha256FromReleaseBody(String body) {
+    // 包级可见（非 private）以便 UpdateAssetNameTest 进行回归测试。
+    // 这两个方法是自更新链路的安全边界，必须有测试固化其契约。
+    static String parseSha256FromReleaseBody(String body) {
         if (body == null) {
             return null;
         }
@@ -1310,7 +1312,7 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
      * （../、绝对路径、路径分隔符）—— 即使名称由本地拼接而成，
      * 也不能依赖「上游数据一定干净」这一假设（原则 1）。
      */
-    private static boolean isSafeAssetFileName(String name) {
+    static boolean isSafeAssetFileName(String name) {
         if (name == null || name.isEmpty() || name.length() > 128) {
             return false;
         }
