@@ -1269,7 +1269,14 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
                                     }
 
                                     Button updateAgree = window.findViewById(R.id.update_agree);
-                                    if (downloadUrl == null || expectedSha256 == null) {
+                                    // lambda 只能捕获 final / 有效 final 变量，
+                                    // 而 downloadUrl 在循环中被赋值，故此处做一次
+                                    // 显式 final 拷贝（编译错误的直接修法）：
+                                    //   local variables referenced from a lambda expression
+                                    //   must be final or effectively final
+                                    final String finalDownloadUrl = downloadUrl;
+                                    final String finalExpectedSha256 = expectedSha256;
+                                    if (finalDownloadUrl == null || finalExpectedSha256 == null) {
                                         // 缺少 HTTPS 地址或发布页未提供 SHA-256 —— 拒绝更新
                                         updateAgree.setEnabled(false);
                                         XLog.e("更新中止：缺少 HTTPS 下载地址或 SHA-256 校验值");
@@ -1277,7 +1284,7 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
                                         updateAgree.setOnClickListener(v -> {
                                             alertDialog.cancel();
                                             GoUtils.DisplayToast(MainActivity.this, getResources().getString(R.string.update_downloading));
-                                            downloadNewVersion(downloadUrl, expectedSha256);
+                                            downloadNewVersion(finalDownloadUrl, finalExpectedSha256);
                                         });
                                     }
                                 }
