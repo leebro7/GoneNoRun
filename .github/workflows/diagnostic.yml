@@ -57,6 +57,12 @@ jobs:
             echo "--- platforms ---";   ls "${ANDROID_HOME}/platforms" 2>&1
             echo "--- ndk ---";         ls "${ANDROID_HOME}/ndk" 2>&1
             echo
+            # 与 build-apk.yml 保持一致：插件在 local.properties 缺失时会让配置阶段失败
+            if [ ! -f local.properties ]; then
+              printf "MAPS_API_KEY=\nMAPS_SAFE_CODE=\n" > local.properties
+            fi
+            echo "local.properties created: $(test -f local.properties && echo yes || echo no)"
+            echo
             echo "=== gradle: tasks (configuration-only check) ==="
             chmod +x gradlew
             set +e
