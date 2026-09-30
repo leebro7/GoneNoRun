@@ -10,10 +10,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'app/libs/**'
-      - 'app/build.gradle'
-      - '.github/workflows/diagnostic.yml'
 
 permissions:
   contents: read
