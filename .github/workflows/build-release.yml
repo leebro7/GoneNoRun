@@ -23,12 +23,16 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 构建并签名。此作业持有签名凭据，因此绑定受保护 Environment。
+  # 构建并签名。
+  #
+  # 该作业持有签名凭据。凭据来自名为 production 的 Environment Secret —— 
+  # Environment 提供审批闸门：未获批准时本作业不会启动，凭据也不会被注入。
+  # 注意：审批只在发布前发生一次。若把 publish 也绑定同一 Environment，
+  # 会要求第二次审批，因此 publish 使用普通仓库 Secret（无需审批）。
   # ---------------------------------------------------------------------------
   build-and-sign:
     name: Build & Sign Release APK
     runs-on: ubuntu-latest
-    # 需在仓库 Settings → Environments 中为 production 配置 required reviewers
     environment: production
     permissions:
       contents: read
@@ -37,6 +41,22 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+
+      # 版本一致性：tag 必须与 app/build.gradle 的 versionName 一致。
+      # 客户端自更新按 tag 推导资产名（Go_<version>_arm64-v8a_release.apk），
+      # 若二者不一致，发布出去的 APK 永远不会被客户端匹配到，更新静默失效。
+      - name: Assert tag matches versionName
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VER=$(grep -oP "versionName\s+'\K[^']+" app/build.gradle | head -n1)
+          echo "tag=${TAG}  versionName=${VER}"
+          if [ "${TAG}" != "v${VER}" ]; then
+            echo "::error::tag (${TAG}) 与 versionName (${VER}) 不一致，应为 v${VER}"
+            echo "::error::客户端按 tag 推导资产名，不一致会导致自更新无法匹配"
+            exit 1
+          fi
+          echo "VERSION_NAME=${VER}" >> "$GITHUB_ENV"
 
       - name: Set up JDK 17
         uses: actions/setup-java@9704b39bf258b59bc04b50fa2dd55e9ed76b47a8 # v4.1.0
@@ -91,16 +111,41 @@ jobs:
           chmod 600 local.properties
           ./gradlew assembleRelease --stacktrace
 
-      - name: Assert APK is signed
+      - name: Assert APK is signed by the release key
+        env:
+          GOGOGO_KEYSTORE_FILE: ${{ runner.temp }}/release.p12
+          GOGOGO_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
           APK=$(ls app/build/outputs/apk/release/*.apk | head -n1)
           echo "APK_DIR=$(dirname "${APK}")" >> "$GITHUB_ENV"
           echo "APK_NAME=$(basename "${APK}")" >> "$GITHUB_ENV"
+
           APKSIGNER=$(ls "${ANDROID_HOME}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n1)
           "${APKSIGNER}" verify --verbose --print-certs "${APK}" > "${RUNNER_TEMP}/apksigner.txt"
           cat "${RUNNER_TEMP}/apksigner.txt"
-          grep -q 'Verified' "${RUNNER_TEMP}/apksigner.txt" || { echo "::error::APK 签名校验失败"; exit 1; }
+          grep -q 'Verified' "${RUNNER_TEMP}/apksigner.txt" \
+            || { echo "::error::APK 签名校验失败"; exit 1; }
+
+          # 仅有 'Verified' 只说明「被某个密钥签过」，不足以说明是我们的发布密钥。
+          # 这里把 APK 的实际签名证书指纹与密钥库中的证书指纹比对，
+          # 确保发布物由预期密钥签署（否则客户端 UpdateVerifier 会拒绝安装，
+          # 用户看到的是「校验失败」而非静默降级）。
+          APK_CERT=$(grep -m1 -i 'certificate SHA-256 digest' "${RUNNER_TEMP}/apksigner.txt" \
+                     | sed 's/.*digest: //' | tr -d ':' | tr 'A-F' 'a-f')
+          KS_CERT=$(keytool -list -v \
+                      -keystore "${GOGOGO_KEYSTORE_FILE}" \
+                      -storepass "${GOGOGO_KEYSTORE_PASSWORD}" \
+                      -storetype PKCS12 2>/dev/null \
+                    | grep -m1 -i 'SHA256:' | sed 's/.*SHA256: //' | tr -d ':' | tr 'A-F' 'a-f')
+          echo "APK cert : ${APK_CERT}"
+          echo "KS  cert : ${KS_CERT}"
+          if [ -z "${APK_CERT}" ] || [ -z "${KS_CERT}" ] || [ "${APK_CERT}" != "${KS_CERT}" ]; then
+            echo "::error::APK 签名证书与密钥库不匹配 —— 发布物并非由预期发布密钥签署"
+            exit 1
+          fi
+          echo "CERT_SHA256=${APK_CERT}" >> "$GITHUB_ENV"
+          echo "签名证书与密钥库一致：${APK_CERT}"
 
       - name: Generate checksums and release notes
         run: |
@@ -108,7 +153,7 @@ jobs:
           cd "${APK_DIR}"
           sha256sum "${APK_NAME}" > "${APK_NAME}.sha256"
           SUM=$(cut -d' ' -f1 "${APK_NAME}.sha256")
-          CERT=$(grep -m1 -i 'certificate SHA-256 digest' "${RUNNER_TEMP}/apksigner.txt" | sed 's/.*digest: //' || true)
+          CERT="${CERT_SHA256}"
           {
             echo "## 下载与校验"
             echo
@@ -181,12 +226,15 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # 发布。仅此作业需要 contents: write。
+  #
+  # 刻意不绑定 production Environment：审批已在 build-and-sign 发生过一次，
+  # 再次绑定会导致发布阶段被要求第二次审批。本作业不接触任何签名凭据，
+  # 只消费上一个作业产出的 artifact。
   # ---------------------------------------------------------------------------
   publish:
     name: Publish GitHub Release
     needs: build-and-sign
     runs-on: ubuntu-latest
-    environment: production
     permissions:
       contents: write
     steps:

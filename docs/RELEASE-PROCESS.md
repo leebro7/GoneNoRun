@@ -88,12 +88,20 @@ git push origin v1.13.0
 
 `build-release.yml` 随即执行：
 
-1. **等待人工审批**（Environment `production` 的 required reviewers）
-2. 还原签名密钥库到 runner 临时目录
-3. `./gradlew assembleRelease` —— 由 Gradle **一次**完成签名
-4. `apksigner verify` 断言 APK 已签名
-5. 生成 `.sha256` 与含该校验值的 `release-notes.md`
-6. 上传产物 → `publish` 作业创建 **draft** Release
+1. **校验 tag 与 `versionName` 一致**（`v<versionName>`），不一致直接失败 ——
+   客户端按 tag 推导资产名，不一致会导致自更新静默失效
+2. **等待人工审批**（Environment `production` 的 required reviewers）——
+   审批只在此处发生一次，`publish` 作业刻意不绑定 Environment，以免要求二次审批
+3. 还原签名密钥库到 runner 临时目录
+4. `./gradlew assembleRelease` —— 由 Gradle **一次**完成签名
+5. `apksigner verify` 断言已签名，并**比对 APK 证书指纹与密钥库证书指纹**，
+   确保发布物确由预期密钥签署
+6. 生成 `.sha256`、`release-notes.md`（含 `SHA-256:` 行）与已签名的 provenance
+7. 上传产物 → `publish` 作业创建 **draft** Release
+
+> `release-notes.md` 的格式与客户端 `MainActivity.parseSha256FromReleaseBody()`
+> 的解析逻辑是耦合的：正文必须包含 `SHA-256: <64位十六进制>`。
+> 该格式已做端到端校验（生成 → 客户端正则解析 → 命中 APK 哈希而非证书哈希）。
 
 ---
 

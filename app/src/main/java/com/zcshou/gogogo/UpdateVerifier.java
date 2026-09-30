@@ -47,11 +47,25 @@ final class UpdateVerifier {
     }
 
     /** 读取已安装应用的签名证书 SHA-256 集合（十六进制）。 */
+    /**
+     * 选择与当前系统版本匹配的签名查询标志。
+     *
+     * GET_SIGNING_CERTIFICATES 是 API 28（P）引入的；在 API 27（本应用
+     * minSdkVersion）上使用它会导致 PackageManager 抛出
+     * IllegalArgumentException。仅仅在读取 signingInfo 时做版本判断是不够的
+     * —— 传入不受支持的 flag 本身就会失败，从而使校验恒为「拒绝」，
+     * 表现为更新功能在所有 Android 8.1 设备上不可用。
+     */
+    private static int signingFlags() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                ? PackageManager.GET_SIGNING_CERTIFICATES
+                : PackageManager.GET_SIGNATURES;
+    }
+
     private static java.util.Set<String> installedCertHashes(Context context) {
         try {
             PackageManager pm = context.getPackageManager();
-            PackageInfo info = pm.getPackageInfo(context.getPackageName(),
-                    PackageManager.GET_SIGNING_CERTIFICATES);
+            PackageInfo info = pm.getPackageInfo(context.getPackageName(), signingFlags());
             return certHashesOf(info);
         } catch (Exception e) {
             return java.util.Collections.emptySet();
@@ -62,8 +76,7 @@ final class UpdateVerifier {
     private static java.util.Set<String> archiveCertHashes(Context context, File apk) {
         try {
             PackageManager pm = context.getPackageManager();
-            PackageInfo info = pm.getPackageArchiveInfo(apk.getAbsolutePath(),
-                    PackageManager.GET_SIGNING_CERTIFICATES);
+            PackageInfo info = pm.getPackageArchiveInfo(apk.getAbsolutePath(), signingFlags());
             return certHashesOf(info);
         } catch (Exception e) {
             return java.util.Collections.emptySet();
