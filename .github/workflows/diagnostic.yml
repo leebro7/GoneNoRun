@@ -85,6 +85,18 @@ jobs:
             echo "--- error lines ---"
             grep -nE "FAILURE|What went wrong|Could not|error:|Caused by" /tmp/gv.log | head -25
             echo
+
+            echo "=== gradle: assembleDebug (the real build) ==="
+            if ./gradlew assembleDebug --no-daemon > /tmp/gradle-build.log 2>&1; then
+              echo "assembleDebug: OK"
+              find app/build/outputs/apk -name "*.apk" -exec ls -la {} \; 2>/dev/null
+            else
+              echo "assembleDebug: FAILED"
+            fi
+            echo "--- error lines ---"
+            grep -nE "error:|e: |FAILURE|What went wrong|Could not|Caused by|> Task .* FAILED" /tmp/gradle-build.log | head -40
+            echo "--- last 60 lines ---"
+            tail -60 /tmp/gradle-build.log
           } > "$OUT" 2>&1
           cat "$OUT"
           cp "$OUT" "${GITHUB_WORKSPACE}/diag-output.txt"
