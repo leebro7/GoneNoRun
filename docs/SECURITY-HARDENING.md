@@ -60,7 +60,7 @@
 | 依赖完整性 | `app/build.gradle` 的 `verifyVendoredDependencies` + `app/libs/VENDORED_DEPENDENCIES.sha256` | Gradle 的 locking/verification 覆盖不到 `files()`/`fileTree()` 引入的本地二进制 |
 | 依赖校验元数据与锁定 | `build.gradle` 的 `dependencyVerification` / `dependencyLocking` | 元数据需维护者本地生成后提交（本环境无 JDK） |
 | Gradle 发行版哈希 | `gradle/wrapper/gradle-wrapper.properties` 的 `distributionSha256Sum` | 取自 services.gradle.org 官方校验文件 |
-| 策略即代码 | `scripts/check-workflow-policy.mjs` + 对抗性测试 | R1–R7 不变量，9 个负向用例全部通过 |
+| 策略即代码 | `scripts/check-workflow-policy.mjs` + 对抗性测试 | R1–R8 不变量，9 个负向用例全部通过 |
 | 加固不变量门禁 | `.github/actions/security-gate/action.yml` + `.github/workflows/security-gate.yml` | 复合 Action，无第三方依赖。在每次 push/PR 上强制执行：工作流策略、校验器自测、vendored 校验和、密钥扫描、应用侧安全不变量、Gradle wrapper 哈希。**已用 6 类人为回归验证其确实会阻断**（见 §2.6） |
 | 发布来源证明 | `scripts/gen-provenance.mjs` + `build-release.yml` 的签署步骤 | 生成 in-toto Statement / SLSA provenance v1 形式本体，覆盖源码提交、构建参数、制品 SHA-256、builder 与 invocation id，用发布密钥签名后随 Release 发布。**局限**：与 APK 同一信任根，属自证，不等同于 Sigstore keyless 或独立 KMS 证明。验证方法见 §2.5 |
 
@@ -174,6 +174,7 @@ grep -a -q 'getExternalFilesDir' <(strip_java)
 | R5 | 禁止通配 tag 触发发布 |
 | R6 | 顶层 `permissions` 不得授予 `contents: write` |
 | R7 | 仓库中不得存在密钥库类文件 |
+| R8 | 作业声明的每条权限必须有对应使用证据（权限最小化） |
 
 实现刻意不依赖第三方 YAML 解析器，以免校验器自身成为供应链风险。
 `scripts/check-workflow-policy.test.mjs` 提供 9 个对抗性用例（含 6 个负向用例），

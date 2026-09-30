@@ -24,8 +24,9 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
+    # 权限最小化：CodeQL 只需要读代码、上传 SARIF 结果。
+    # 省略 actions: read —— 本作业不通过 API 读取其他运行的信息。
     permissions:
-      actions: read
       contents: read
       security-events: write
 

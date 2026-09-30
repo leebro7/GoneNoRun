@@ -104,7 +104,7 @@ echo "[4] 本地校验"
 
 if command -v node >/dev/null 2>&1; then
   if node scripts/check-workflow-policy.mjs >/dev/null 2>&1; then
-    ok "workflow 策略 R1–R7 通过"
+    ok "workflow 策略 R1–R8 通过"
   else
     bad "workflow 策略校验失败"
   fi
@@ -123,45 +123,68 @@ else
 fi
 
 # ---------------------------------------------------------------
-# 5. 远端平台配置（需要 gh 且已登录）
+# 5. 远端平台配置
+#
+# 权限最小化设计：只用**公开、无需认证**的 GitHub API。
+# 早期版本依赖 `gh` 且需要 admin 才能读 environment/secrets —— 那等于要求
+# 运维为自己授予过宽权限。改为观察最近一次 Build Release 的**步骤级结论**：
+# 若 "Materialize signing keystore" 成功，说明签名 Secret 就位；失败即缺失。
+# 这不需要任何凭据。
 # ---------------------------------------------------------------
-echo "[5] 远端平台配置"
+echo "[5] 远端平台配置（公开 API，无需认证）"
 
-if [ "${1:-}" = "--remote" ] && command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-  ENVS=$(gh api "repos/${REPO_SLUG}/environments" --jq '.environments[].name' 2>/dev/null || true)
-  if printf '%s\n' "${ENVS}" | grep -qx 'production'; then
+API="https://api.github.com/repos/${REPO_SLUG}"
+fetch_json() { timeout 30 curl -sS -H 'Accept: application/vnd.github+json' "$1" 2>/dev/null; }
+
+ENV_JSON=$(fetch_json "${API}/environments")
+if printf '%s' "${ENV_JSON}" | grep -q '"name"'; then
+  if printf '%s' "${ENV_JSON}" | grep -q '"production"'; then
     ok "environment 'production' 存在"
-    RULES=$(gh api "repos/${REPO_SLUG}/environments/production" --jq '.protection_rules | length' 2>/dev/null || echo 0)
-    if [ "${RULES:-0}" -gt 0 ]; then
-      ok "production 含 ${RULES} 条保护规则（含审批）"
-    else
-      warn "production 无保护规则 —— 发布不会等待人工审批"
-    fi
   else
-    bad "environment 'production' 不存在（发布作业无法取得签名 Secret）"
+    bad "environment 'production' 不存在 —— 发布作业无法取得签名 Secret"
   fi
-
-  echo "  -- Secret 名称（值不可读，请自行核对是否都已配置）"
-  gh api "repos/${REPO_SLUG}/environments/production/secrets" \
-     --jq '.secrets[].name' 2>/dev/null | sed 's/^/     /' \
-     || warn "无法列出 environment secrets（需要 admin 权限）"
-
-  for s in SIGNING_KEYSTORE_BASE64 SIGNING_KEYSTORE_PASSWORD SIGNING_KEY_PASSWORD \
-           SIGNING_KEY_ALIAS MAPS_API_KEY MAPS_SAFE_CODE; do
-    if gh api "repos/${REPO_SLUG}/environments/production/secrets" --jq '.secrets[].name' 2>/dev/null | grep -qx "$s"; then
-      ok "secret ${s} 已配置"
-    else
-      bad "secret ${s} 缺失或在仓库级（必须在 production environment 下）"
-    fi
-  done
+  RULES=$(printf '%s' "${ENV_JSON}" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);const e=(j.environments||[]).find(x=>x.name==="production");console.log(e?((e.protection_rules||[]).length):"-1")}catch(_){console.log("-1")}})' 2>/dev/null)
+  if [ "${RULES}" = "-1" ]; then
+    warn "无法读取 production 保护规则（需 admin，属预期）"
+  elif [ "${RULES}" = "0" ]; then
+    warn "production 保护规则为 0 —— 发布不会等待人工审批"
+  else
+    ok "production 含 ${RULES} 条保护规则"
+  fi
 else
-  warn "跳过（需加 --remote，且已安装并登录 gh）"
-  echo "     期望的 environment secrets："
-  for s in SIGNING_KEYSTORE_BASE64 SIGNING_KEYSTORE_PASSWORD SIGNING_KEY_PASSWORD \
-           SIGNING_KEY_ALIAS MAPS_API_KEY MAPS_SAFE_CODE; do
-    echo "       - ${s}"
-  done
+  warn "environments 端点不可读（可能未启用 Environments）"
 fi
+
+# 最近一次 Build Release 的步骤级结论 —— 无需任何凭据
+RUNS=$(fetch_json "${API}/actions/workflows/build-release.yml/runs?per_page=1")
+RUN_ID=$(printf '%s' "${RUNS}" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);const r=(j.workflow_runs||[])[0];console.log(r?r.id:"")}catch(_){console.log("")}})' 2>/dev/null)
+if [ -n "${RUN_ID}" ]; then
+  CONC=$(printf '%s' "${RUNS}" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);const r=(j.workflow_runs||[])[0];console.log((r.conclusion||r.status)+" / "+(r.head_branch||""))}catch(_){console.log("?")}})' 2>/dev/null)
+  echo "  -- 最近一次 Build Release: ${CONC}"
+
+  fetch_json "${API}/actions/runs/${RUN_ID}/jobs" | node -e '
+let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  try{
+    const j=JSON.parse(s);
+    const job=(j.jobs||[]).find(x=>x.name&&x.name.indexOf("Build")===0)||(j.jobs||[])[0];
+    if(!job) return;
+    const mat=(job.steps||[]).find(st=>/Materialize signing keystore/.test(st.name));
+    const fail=(job.steps||[]).find(st=>st.conclusion==="failure");
+    if(mat&&mat.conclusion==="success") console.log("  ok    signing secrets 就位（Materialize signing keystore 成功）");
+    else if(mat&&mat.conclusion==="failure") console.log("  FAIL  签名 Secret 缺失，或未放在 production environment 下");
+    else if(mat&&mat.conclusion==="skipped") console.log("  warn  签名步骤被跳过（上游步骤先失败）");
+    if(fail) console.log("  --    首个失败步骤: "+(fail.number||"")+" "+fail.name);
+  }catch(e){}
+})' 2>/dev/null
+else
+  warn "尚无 Build Release 运行记录"
+fi
+
+echo "  -- 期望的 environment secrets（值不可读，仅核对名称）："
+for s in SIGNING_KEYSTORE_BASE64 SIGNING_KEYSTORE_PASSWORD SIGNING_KEY_PASSWORD \
+         SIGNING_KEY_ALIAS MAPS_API_KEY MAPS_SAFE_CODE; do
+  echo "       - ${s}"
+done
 
 echo "============================================================"
 if [ "${FAIL}" -eq 0 ]; then

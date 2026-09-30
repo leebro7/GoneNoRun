@@ -1,6 +1,6 @@
 name: 'GoGoGo Security Gate'
 description: >-
-  对加固基线执行仓库级安全断言：工作流策略（R1–R7）、vendored 依赖完整性、
+  对加固基线执行仓库级安全断言：工作流策略（R1–R8）、vendored 依赖完整性、
   全历史密钥泄露、以及应用侧安全不变量。任一失败即让作业失败。
 author: 'GoGoGo Security Baseline'
 
@@ -46,9 +46,9 @@ runs:
         node-version: ${{ inputs.node-version }}
 
     # ---------------------------------------------------------------
-    # 1. 工作流策略：R1–R7（SHA 固定、最小权限、审批闸门、无密钥入库）
+    # 1. 工作流策略：R1–R8（SHA 固定、最小权限、审批闸门、无密钥入库）
     # ---------------------------------------------------------------
-    - name: Workflow policy (R1-R7)
+    - name: Workflow policy (R1-R8)
       id: policy
       shell: bash
       run: |
@@ -299,7 +299,7 @@ runs:
           echo
           echo "| 检查项 | 结果 |"
           echo "|---|---|"
-          echo "| Workflow policy (R1–R7) | ${POLICY} |"
+          echo "| Workflow policy (R1–R8) | ${POLICY} |"
           echo "| Checker self-test | ${SELFTEST} |"
           echo "| Vendored checksums | ${VENDORED} |"
           echo "| Secret scan | ${SECRETS} |"

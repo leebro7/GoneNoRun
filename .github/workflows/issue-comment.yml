@@ -12,16 +12,17 @@ on:
     types: [labeled]
 
 permissions:
-  contents: read
+  contents: none
 
 jobs:
   issue-labeled:
     name: Reply on label
     runs-on: ubuntu-latest
+    # 权限最小化：只对 issue 发表评论/关闭 issue。
+    #   * contents: none      —— 不读代码（无需 checkout）
+    #   * pull-requests: 省略 —— issues: write 已覆盖 PR 的评论与状态变更
     permissions:
-      contents: read
       issues: write
-      pull-requests: write
     steps:
       - name: Comment or close based on label
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1

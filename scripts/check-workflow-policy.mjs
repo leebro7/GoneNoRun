@@ -160,6 +160,94 @@ function checkWorkflow(file) {
     }
   });
 
+  // --- R8: 声明的权限必须有对应证据（权限最小化）------------------------
+  //
+  // 过度授权是常见的最小权限违规，且人工审查容易漏。这里独立做一遍
+  // 「作业切分」，逐个作业检查每条权限是否被实际行为需要。
+  //
+  // 证据映射（保守：存在任一可能的使用方式即视为需要）：
+  //   contents: read          <- actions/checkout、下载制品、release view
+  //   contents: write         <- action-gh-release、gh release create、git push
+  //   issues: write           <- github.rest.issues.*
+  //   pull-requests: write    <- github.rest.pulls.*
+  //   security-events: write  <- CodeQL init/analyze、upload-sarif
+  //   actions: read           <- github.rest.actions.*、upload/download-artifact
+  //   id-token: write         <- OIDC（云联邦、Sigstore keyless）
+  const EVIDENCE = [
+    { perm: 'contents',       level: 'read',  re: /actions\/checkout|download-artifact|gh release view/ },
+    { perm: 'contents',       level: 'write', re: /action-gh-release|gh release create|gh release upload|git push/ },
+    { perm: 'issues',         level: 'write', re: /github\.rest\.issues\./ },
+    { perm: 'pull-requests',  level: 'write', re: /github\.rest\.pulls\./ },
+    { perm: 'security-events', level: 'write', re: /codeql-action\/(init|analyze)|upload-sarif/ },
+    { perm: 'actions',        level: 'read',  re: /github\.rest\.actions\.|upload-artifact|download-artifact/ },
+    { perm: 'id-token',       level: 'write', re: /id-token|OIDC/ },
+  ];
+
+  // 第二遍：切分出每个作业的文本范围与其 permissions 条目
+  {
+    let inJobs = false;
+    let jobIndent = null;
+    const bounds = []; // { name, line, start, end }
+    lines.forEach((rawLine, idx) => {
+      const line = stripComment(rawLine);
+      const trimmed = line.trim();
+      if (trimmed === '') return;
+      const ind = indentation(line);
+      if (ind === 0) {
+        inJobs = /^jobs\s*:/.test(trimmed);
+        jobIndent = null;
+        return;
+      }
+      if (!inJobs) return;
+      if (jobIndent === null && /^[A-Za-z0-9_-]+\s*:/.test(trimmed)) {
+        jobIndent = ind;
+        bounds.push({ name: trimmed.replace(/\s*:.*$/, ''), line: idx + 1, start: idx, end: lines.length });
+      } else if (jobIndent !== null && ind === jobIndent && /^[A-Za-z0-9_-]+\s*:/.test(trimmed)) {
+        if (bounds.length) bounds[bounds.length - 1].end = idx;
+        bounds.push({ name: trimmed.replace(/\s*:.*$/, ''), line: idx + 1, start: idx, end: lines.length });
+      }
+    });
+
+    for (const job of bounds) {
+      const region = lines.slice(job.start, job.end);
+      const body = region.join('\n');
+      // 提取该作业内 permissions: 块下的条目
+      const perms = [];
+      let inPerm = false;
+      let permIndent = null;
+      for (const l of region) {
+        const t = stripComment(l).trim();
+        if (t === '') continue;
+        const ind = indentation(l);
+        if (/^permissions\s*:\s*$/.test(t)) {
+          inPerm = true;
+          permIndent = ind;
+          continue;
+        }
+        // 形如 `permissions: contents: read` 的单行写法
+        const inline = t.match(/^permissions\s*:\s*(\S+)\s*:\s*(\S+)/);
+        if (inline) {
+          perms.push([inline[1], inline[2]]);
+          continue;
+        }
+        if (inPerm) {
+          if (ind <= permIndent) { inPerm = false; continue; }
+          const m = t.match(/^([a-z-]+)\s*:\s*(\S+)/);
+          if (m) perms.push([m[1], m[2]]);
+        }
+      }
+      for (const [perm, level] of perms) {
+        if (level === 'none') continue;
+        const ev = EVIDENCE.find((e) => e.perm === perm && e.level === level);
+        if (!ev) continue;
+        if (!ev.re.test(body)) {
+          fail('R8', rel, job.line,
+            `作业 "${job.name}" 声明了 ${perm}: ${level}，但作业内无对应使用证据（过度授权）`);
+        }
+      }
+    }
+  }
+
   // --- R2: 顶层 permissions 必须存在 -----------------------------------
   if (!hasTopPermissions) {
     fail('R2', rel, 1, 'workflow 缺少顶层 permissions 声明（应默认只读）');

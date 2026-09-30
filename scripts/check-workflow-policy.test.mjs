@@ -171,6 +171,91 @@ jobs:
       - run: echo hi
 `,
   },
+  {
+    name: 'R8 作业声明 pull-requests: write 却不用 PR API 必须被拦下',
+    expectPass: false,
+    expectRule: 'R8',
+    yaml: `name: t
+on: [push]
+permissions:
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - run: echo hi
+`,
+  },
+  {
+    name: 'R8 作业声明 actions: read 却不用 actions API/artifact 必须被拦下',
+    expectPass: false,
+    expectRule: 'R8',
+    yaml: `name: t
+on: [push]
+permissions:
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - run: echo hi
+`,
+  },
+  {
+    name: 'R8 有 checkout 时 contents: read 应通过',
+    expectPass: true,
+    yaml: `name: t
+on: [push]
+permissions:
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+`,
+  },
+  {
+    name: 'R8 用 issues API 时 issues: write 应通过',
+    expectPass: true,
+    yaml: `name: t
+on: [push]
+permissions:
+  contents: none
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - run: echo "github.rest.issues.createComment"
+`,
+  },
+  {
+    name: 'R8 声明 issues: write 却完全不用 issues API 必须被拦下',
+    expectPass: false,
+    expectRule: 'R8',
+    yaml: `name: t
+on: [push]
+permissions:
+  contents: none
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - run: echo hi
+`,
+  },
 ];
 
 let failed = 0;
