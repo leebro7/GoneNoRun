@@ -64,24 +64,24 @@ jobs:
             echo "=== gradle: tasks (configuration-only check) ==="
             chmod +x gradlew
             set +e
-            ./gradlew tasks --no-daemon > /tmp/gradle-tasks.log 2>&1
-            GT=\$?
-            echo "gradle tasks exit=\$GT"
-            echo "--- last 40 lines ---"
-            tail -40 /tmp/gradle-tasks.log
-            echo
-            echo "--- first error lines ---"
-            grep -nE "FAILURE|What went wrong|Could not|error:|Caused by" /tmp/gradle-tasks.log | head -20
+            if ./gradlew tasks --no-daemon > /tmp/gt.log 2>&1; then
+              echo "gradle tasks: OK (configuration phase passes)"
+            else
+              echo "gradle tasks: FAILED (configuration phase)"
+            fi
+            echo "--- last 40 lines ---"; tail -40 /tmp/gt.log
+            echo "--- error lines ---"
+            grep -nE "FAILURE|What went wrong|Could not|error:|Caused by|> " /tmp/gt.log | head -25
             echo
             echo "=== gradle: verifyVendoredDependencies ==="
-            ./gradlew verifyVendoredDependencies --no-daemon > /tmp/gradle-vv.log 2>&1
-            GV=\$?
-            echo "gradle verify exit=\$GV"
-            echo "--- last 40 lines ---"
-            tail -40 /tmp/gradle-vv.log
-            echo
-            echo "--- first error lines ---"
-            grep -nE "FAILURE|What went wrong|Could not|error:|Caused by" /tmp/gradle-vv.log | head -20
+            if ./gradlew verifyVendoredDependencies --no-daemon > /tmp/gv.log 2>&1; then
+              echo "gradle verify: OK"
+            else
+              echo "gradle verify: FAILED"
+            fi
+            echo "--- last 40 lines ---"; tail -40 /tmp/gv.log
+            echo "--- error lines ---"
+            grep -nE "FAILURE|What went wrong|Could not|error:|Caused by" /tmp/gv.log | head -25
             echo
           } > "$OUT" 2>&1
           cat "$OUT"
