@@ -82,6 +82,9 @@ jobs:
       # 无编译器环境下的左移检查：捕获「用了类却没 import」这类编译错误
       - name: Unimported symbol check
         run: node scripts/check-unimported-symbols.mjs
+      - name: XML structure check
+        run: node scripts/check-xml-structure.mjs
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
 

@@ -83,6 +83,19 @@ runs:
         node scripts/check-unimported-symbols.mjs
         echo "::endgroup::"
     # ---------------------------------------------------------------
+    # 2c. XML 结构校验：注释嵌套/未配平、标签不匹配、引号不成对
+    #     实测踩过：manifest 里出现嵌套注释（XML 非法），只在 CI 编译时
+    #     才暴露。本环境无 xmllint，故用脚本左移该检查。
+    # ---------------------------------------------------------------
+    - name: XML structure check
+      id: xmlcheck
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::XML structure"
+        node scripts/check-xml-structure.mjs
+        echo "::endgroup::"
+    # ---------------------------------------------------------------
     # 3. vendored 二进制依赖完整性（Gradle locking 覆盖不到 fileTree/files）
     # ---------------------------------------------------------------
     - name: Vendored dependency checksums
@@ -304,6 +317,7 @@ runs:
         POLICY: ${{ steps.policy.outcome }}
         SELFTEST: ${{ steps.policy-selftest.outcome }}
         UNIMPORTED: ${{ steps.unimported.outcome }}
+        XMLCHECK: ${{ steps.xmlcheck.outcome }}
         VENDORED: ${{ steps.vendored.outcome }}
         SECRETS: ${{ steps.secrets.outcome }}
         APPINV: ${{ steps.app-invariants.outcome }}
@@ -311,7 +325,7 @@ runs:
       run: |
         set -euo pipefail
         failed=0
-        for o in "$POLICY" "$SELFTEST" "$UNIMPORTED" "$VENDORED" "$SECRETS" "$APPINV" "$WRAPPER"; do
+        for o in "$POLICY" "$SELFTEST" "$UNIMPORTED" "$XMLCHECK" "$VENDORED" "$SECRETS" "$APPINV" "$WRAPPER"; do
           [ "$o" = "failure" ] && failed=$((failed + 1))
         done
         echo "findings=${failed}" >> "$GITHUB_OUTPUT"
@@ -328,6 +342,7 @@ runs:
           echo "| Workflow policy (R1–R8) | ${POLICY} |"
           echo "| Checker self-test | ${SELFTEST} |"
           echo "| Unimported symbols | ${UNIMPORTED} |
+          | XML structure | ${XMLCHECK} |
           | Vendored checksums | ${VENDORED} |"
           echo "| Secret scan | ${SECRETS} |"
           echo "| App hardening invariants | ${APPINV} |"
