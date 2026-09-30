@@ -114,12 +114,6 @@ jobs:
       #   The file .../local.properties could not be found
       # 无密钥构建（PR、fork、手动构建）因此全部失败。这里写入空值占位；
       # 地图功能不可用，但编译与打包正常。local.properties 已在 .gitignore 中。
-      - name: Provide empty local.properties (no secrets)
-        run: |
-          if [ ! -f local.properties ]; then
-            printf "MAPS_API_KEY=PLACEHOLDER\nMAPS_SAFE_CODE=PLACEHOLDER\n" > local.properties
-          fi
-          echo "local.properties present (placeholder values)"
       - name: Verify vendored dependencies
         run: ./gradlew verifyVendoredDependencies
 

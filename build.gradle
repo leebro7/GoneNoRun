@@ -8,9 +8,8 @@ buildscript {
 
     dependencies {
         classpath 'com.android.tools.build:gradle:8.12.1'
-        // 谷歌官方推荐的用于隐藏地图 KEY 的插件
-        // https://developers.google.com/maps/documentation/places/android-sdk/secrets-gradle-plugin
-        classpath("com.google.android.libraries.mapsplatform.secrets-gradle-plugin:secrets-gradle-plugin:2.0.1")
+        // 注意：不再依赖 secrets-gradle-plugin。地图 Key 由 app/build.gradle
+        // 通过 buildConfigField 注入，原因见该文件顶部说明。
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files

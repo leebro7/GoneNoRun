@@ -1,36 +1,43 @@
 plugins {
     id "com.android.application"
-    // 谷歌官方推荐的用于隐藏地图 KEY 的插件
-    // https://developers.google.com/maps/documentation/places/android-sdk/secrets-gradle-plugin
-    id "com.google.android.libraries.mapsplatform.secrets-gradle-plugin"
 }
 
 // ---------------------------------------------------------------------------
-// 地图 Key 的默认值（必须非空）
+// 地图 Key 的注入方式（已移除 secrets-gradle-plugin）
 //
-// 依据 CI 实测：无密钥构建会生成非法的 BuildConfig，编译直接失败：
+// 原先使用 com.google.android.libraries.mapsplatform.secrets-gradle-plugin，
+// 但它在 CI 上暴露出两个无法回避的问题（均来自实测诊断，非推测）：
 //
-//   BuildConfig.java:12: error: illegal start of expression
-//     public static final String MAPS_API_KEY = ;
+//   1. local.properties 不存在时，项目**配置阶段**就失败：
+//        The file .../local.properties could not be found
+//      这使所有无密钥构建（fork PR、PR、手动构建）在编译前即告失败。
+//   2. 键值为空字符串时生成非法 Java，编译失败：
+//        BuildConfig.java:12: error: illegal start of expression
+//          public static final String MAPS_API_KEY = ;
 //
-// 原因有两层，都必须处理：
-//   1. secrets-gradle-plugin 在 local.properties 不存在时会让**配置阶段**失败
-//      （The file .../local.properties could not be found）。
-//   2. 即使文件存在，若键值为空字符串，插件会生成 `= ;`，仍是非法 Java。
+// 该插件的能力仅是为两个字符串生成 BuildConfig 字段，用 buildConfigField
+// 即可等价实现，且行为完全可控。真实 Secret 由 CI 通过 local.properties
+// 注入；缺失时使用非空占位，保证编译产物合法、构建不会因缺少密钥而中断。
 //
-// 这里为缺失的键提供非空占位；CI 中真实 Secret 通过 local.properties 注入并
-// 覆盖这些默认值。空字符串不能作为默认值。
+// 读取优先级：local.properties（CI/本地） > 环境变量 > 非空占位
 // ---------------------------------------------------------------------------
-secrets {
-    propertiesFileName = 'local.properties'
-    // 显式默认值，保证 BuildConfig 字段始终是合法的非空字符串字面量。
-    // 不设置 defaultPropertiesFileName：默认值只来自这里，避免与
-    // keystore.properties（签名凭据）混淆。
-    defaultProperties = [
-            MAPS_API_KEY   : 'PLACEHOLDER_MAPS_API_KEY',
-            MAPS_SAFE_CODE : 'PLACEHOLDER_MAPS_SAFE_CODE',
-    ]
+def readMapSecret = { String key ->
+    // 1) local.properties（与 Gradle 约定的 SDK 路径文件同名，已在 .gitignore）
+    def propsFile = rootProject.file('local.properties')
+    if (propsFile.exists()) {
+        def props = new Properties()
+        propsFile.withInputStream { props.load(it) }
+        def v = props.getProperty(key)
+        if (v != null && !v.trim().isEmpty()) return v.trim()
+    }
+    // 2) 环境变量
+    def env = System.getenv(key)
+    if (env != null && !env.trim().isEmpty()) return env.trim()
+    // 3) 非空占位 —— 空字符串会生成非法 Java 字面量
+    return "PLACEHOLDER_${key}"
 }
+def mapsApiKey = readMapSecret('MAPS_API_KEY')
+def mapsSafeCode = readMapSecret('MAPS_SAFE_CODE')
 
 // ---------------------------------------------------------------------------
 // 签名凭据加载策略（零信任：仓库内不得存在任何签名凭据）
@@ -91,6 +98,10 @@ android {
         versionName '1.12.3' // https://semver.org/lang/zh-CN/
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += ['zh', 'zh-rCN', 'en', 'en-rUS']
+        // 地图 Key 经 buildConfigField 注入（替代 secrets-gradle-plugin，
+        // 原因见文件顶部说明）。值始终是非空字符串，保证 BuildConfig 合法。
+        buildConfigField "String", "MAPS_API_KEY", "\"${mapsApiKey}\""
+        buildConfigField "String", "MAPS_SAFE_CODE", "\"${mapsSafeCode}\""
         ndk {
             //noinspection ChromeOsAbiSupport
             abiFilters "arm64-v8a"
