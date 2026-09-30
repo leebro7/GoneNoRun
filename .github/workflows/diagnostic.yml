@@ -90,6 +90,12 @@ jobs:
             fi
             echo "--- error lines ---"
             grep -nE "error:|e: |FAILURE|What went wrong|Could not|Caused by|> Task .* FAILED" /tmp/gradle-build.log | head -40
+            echo "--- error -> source resolution ---"
+            grep -oE "[^ ]+\.java:[0-9]+: error" /tmp/gradle-build.log | sort -u | while read -r e; do
+              F=$(echo "$e" | cut -d: -f1); L=$(echo "$e" | cut -d: -f2)
+              echo "ERROR $F:$L"
+              sed -n "$((L-2)),$((L+1))p" "$F" | sed "s/^/    /"
+            done
             echo "--- last 60 lines ---"
             tail -60 /tmp/gradle-build.log
           } > "$OUT" 2>&1
