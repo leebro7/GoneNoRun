@@ -140,25 +140,36 @@ android {
 // 或 files() 引入的本地二进制，因此对 vendored 依赖单独做 SHA-256 白名单校验。
 // 清单见 app/libs/VENDORED_DEPENDENCIES.sha256
 //
-// 实现说明：这里**委托给 sha256sum**，而不是用 Gradle 自己重算哈希。
-// 早期版本用 MessageDigest + f.bytes 自行计算，结果在 CI 上失败而本地
-// `sha256sum -c` 通过 —— 出现了两套实现、只验证过其中一套的局面。
-// 单一实现（sha256sum）可以在本地如实复现 CI 的行为。
+// 实现说明（两处都来自 CI 实测，不是推测）：
+//
+//  1. 委托给 sha256sum，而不是用 Gradle 自己重算哈希。早期版本用
+//     MessageDigest + f.bytes 自行计算，CI 上失败而本地 `sha256sum -c` 通过
+//     —— 出现了两套实现、只验证过其中一套。
+//
+//  2. 校验文件是否存在必须放在**配置期**，不能写进 doFirst 闭包：
+//     本项目默认开启配置缓存（org.gradle.unsafe.configuration-cache=true），
+//     而闭包内调用 file(...) 会引用 Gradle script 对象，直接报错：
+//       Cannot reference a Gradle script object from a Groovy closure
+//       as these are not supported with the configuration cache.
+//     所以路径在配置期解析为普通 File 值，闭包只读该值。
 // ---------------------------------------------------------------------------
+def vendoredManifest = layout.projectDirectory.file('libs/VENDORED_DEPENDENCIES.sha256').asFile
+
 tasks.register('verifyVendoredDependencies', Exec) {
     group = 'verification'
     description = '校验 vendored 二进制依赖（BaiduLBS_Android.jar / *.so）的 SHA-256'
 
-    workingDir = file('libs')
+    workingDir = layout.projectDirectory.dir('libs').asFile
     commandLine 'sha256sum', '-c', 'VENDORED_DEPENDENCIES.sha256'
 
     // 每次都执行：这是完整性校验，不应被 up-to-date 检查跳过
     outputs.upToDateWhen { false }
 
     doFirst {
-        if (!file('libs/VENDORED_DEPENDENCIES.sha256').exists()) {
+        // 只引用配置期捕获的 File，不触碰 script 对象（配置缓存要求）
+        if (!vendoredManifest.exists()) {
             throw new GradleException(
-                "缺少 vendored 依赖校验清单: app/libs/VENDORED_DEPENDENCIES.sha256\n" +
+                "缺少 vendored 依赖校验清单: ${vendoredManifest}\n" +
                 "请运行 scripts/gen-vendored-checksums.sh 生成后提交。")
         }
     }
