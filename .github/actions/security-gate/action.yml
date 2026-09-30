@@ -187,8 +187,14 @@ runs:
         # 输入当作二进制或提前退出），而 `grep -c` 却报 1 —— 这会造成
         # 静默漏检，比报错更危险。改用进程替换 + `grep -a` 强制按文本处理。
         strip_xml() {
-          perl -0777 -pe 's/<!--.*?-->//gs' "$1" 2>/dev/null \
-            || sed -e ':a' -e 's/<!--[^>]*-->//g' "$1"
+          # 剥离 XML 注释，并把换行压成空格。
+          # 必要性：权限声明常写成跨行形式
+          #     <uses-permission
+          #         android:name="android.permission.X" />
+          # 若正则为 uses-permission[^>]*X，[^>]* 不跨行，会漏检所有跨行声明。
+          # 实测确实漏过 ACCESS_MOCK_LOCATION（唯一一个跨行声明）。
+          perl -0777 -pe 's/<!--.*?-->//gs; s/\s+/ /g' "$1" 2>/dev/null \
+            || sed -e 's/<!--[^>]*-->//g' "$1" | tr '\n' ' '
         }
         strip_java() {
           perl -0777 -pe 's{/\*.*?\*/}{}gs; s{//[^\n]*}{}g' \
@@ -196,8 +202,11 @@ runs:
         }
 
         # F-05：特权/多余权限不得作为 uses-permission 回归
+        # 注意：ACCESS_MOCK_LOCATION **不在**此列表内。它是本应用的核心能力
+        # （模拟定位），且授权只能由用户在「开发人员选项 → 选择模拟位置信息
+        # 应用」中显式给出，不会产生运行时弹窗。详见 AndroidManifest 注释。
         for p in READ_LOGS WRITE_SETTINGS MOUNT_UNMOUNT_FILESYSTEMS \
-                 ACCESS_MOCK_LOCATION REPLACE_EXISTING_PACKAGE READ_PHONE_STATE \
+                 REPLACE_EXISTING_PACKAGE READ_PHONE_STATE \
                  ACCESS_BACKGROUND_LOCATION; do
           if grep -a -q "uses-permission[^>]*${p}" <(strip_xml "$MANIFEST"); then
             echo "::error::权限 ${p} 重新出现在 uses-permission 声明中"

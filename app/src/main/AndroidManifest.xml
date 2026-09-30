@@ -47,6 +47,30 @@
     <!-- 网络：地图与逆地理编码、更新检查 -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+      模拟定位（核心功能）
+
+      先前我基于「ACCESS_MOCK_LOCATION 属 signature|privileged 权限、普通应用
+      拿不到」的判断把这一行删掉了，并在注释里标注「需真机验证后加回」。
+      实机反馈推翻了该判断：删掉后应用被系统判定为「权限不足 禁止进入」，
+      模拟定位无法工作。
+
+      事实依据：
+        * 原版仓库的 AndroidManifest 中**声明了** ACCESS_MOCK_LOCATION，
+          且该项目在日常使用中确实生效 —— 说明该声明并非可有可无。
+        * ServiceGo.addTestProviderGPS/Network 与 GoUtils.isAllowMockLocation
+          都调用 LocationManager.addTestProvider()，若未声明该权限，
+          在多数 ROM 上会抛 SecurityException（代码里只是吞掉并打日志，
+          对外表现为「静默不生效」）。
+
+      结论：恢复声明。授权始终由用户在
+      「开发人员选项 → 选择模拟位置信息应用」中显式给出，
+      该权限不会出现在运行时授权对话框中，因此不构成对用户的额外索权。
+    -->
+    <uses-permission
+        android:name="android.permission.ACCESS_MOCK_LOCATION"
+        tools:ignore="MockLocation,ProtectedPermissions" />
+
     <application
         android:name=".GoApplication"
         android:icon="@mipmap/ic_launcher"
@@ -115,21 +139,26 @@
     </application>
 
     <!--
+
+    <!--
       ==========================================================================
-      关于 ACCESS_MOCK_LOCATION（需在真机验证后决定是否加回）
+      关于 ACCESS_MOCK_LOCATION（已验证：必须声明）
       ==========================================================================
-      android.permission.ACCESS_MOCK_LOCATION 是 signature|privileged 权限，
-      普通应用无法持有，且从未出现在运行时权限对话框中。
+      结论变更记录：我最初以「该权限属 signature|privileged、普通应用拿不到」
+      为由删除了这一声明，并标注「需真机验证后加回」。实机反馈推翻了那个判断：
+      删除后应用被判为「权限不足 禁止进入」，模拟定位失效。现已恢复声明。
 
-      模拟定位的实际授权路径是：开发人员选项 →「选择模拟位置信息应用」，
-      该操作使系统允许本应用调用 LocationManager.addTestProvider()。
+      为什么必须声明：ServiceGo.addTestProviderGPS/Network 与
+      GoUtils.isAllowMockLocation 都调用 LocationManager.addTestProvider()。
+      未声明该权限时，多数 ROM 直接抛 SecurityException；而代码仅捕获并写日志，
+      外部表现就是「静默不生效」，很难定位 —— 这次的实机反馈正是这种表现。
 
-      历史版本的实现依赖后一条路径（GoUtils.isAllowMockLocation 通过捕获
-      SecurityException 探测），因此本清单不再声明 ACCESS_MOCK_LOCATION。
+      隐私影响有限：该权限永远不会出现在运行时授权对话框中，用户无需在应用内
+      额外同意；实际启用必须由用户自行前往「开发人员选项 → 选择模拟位置信息应用」
+      显式指定本应用，因此授权动作始终由用户掌握。
 
-      验证要求：请在 Android 8.0 / 10 / 13 真机上确认「选择模拟位置信息应用」
-      列表中仍能看到本应用、且模拟定位功能正常。若某版本无法授权，则需在本
-      清单加回该声明并在此处记录原因与验证结果。
+      安装到受管设备（企业 MDM）时请留意：本应用具备位置伪造能力，
+      这本身即是该应用的设计用途。
     -->
 
 </manifest>
