@@ -36,8 +36,6 @@
 
     <!-- 前台服务：维持模拟定位持续运行并展示常驻通知 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- 声明 foregroundServiceType="location" 时，compileSdk 34+ 要求同时声明本权限 -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- 摇杆悬浮窗（核心交互） -->
@@ -45,9 +43,6 @@
 
     <!-- 应用内自更新：下载并调起系统安装器 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-
-    <!-- 悬浮窗振动反馈 -->
-    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- 网络：地图与逆地理编码、更新检查 -->
     <uses-permission android:name="android.permission.INTERNET" />

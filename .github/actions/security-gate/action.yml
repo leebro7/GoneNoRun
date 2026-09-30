@@ -241,6 +241,102 @@ runs:
           echo "  ok   应用代码无 getExternalFilesDir 调用"
         fi
 
+        # F-05 补充：清单与运行时申请必须一致
+        # 实测发现过：WelcomeActivity 运行时申请 READ_EXTERNAL_STORAGE 与
+        # READ_PHONE_STATE，但两者已从清单移除 —— 运行时申请未声明的权限
+        # 必然被系统拒绝，还会弹出无意义的授权对话框。
+        RUNTIME_PERMS=$(grep -rhoP "Manifest[.]permission[.]\\K[A-Z_]+" "$APP" 2>/dev/null | sort -u)
+        DECLARED_PERMS=$(grep -oP "android:name=.android[.]permission[.]\\K[A-Z_]+" "$MANIFEST" 2>/dev/null | sort -u)
+        undeclared=0
+        for perm in $RUNTIME_PERMS; do
+          if ! printf "%s\n" "$DECLARED_PERMS" | grep -qx "$perm"; then
+            echo "::error::权限 $perm 在运行时被申请但未在清单中声明（申请必然失败）"
+            undeclared=1
+          fi
+        done
+        if [ "$undeclared" -eq 0 ]; then
+          echo "  ok   运行时申请的权限均已在清单声明"
+        else
+          fail=1
+        fi
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::endgroup::"
+          exit 1
+        fi
+        echo "::endgroup::"
+
+    # ---------------------------------------------------------------
+    # 6. Gradle 发行版哈希固定
+    # ---------------------------------------------------------------
+    - name: Gradle wrapper hash pinned
+      id: wrapper
+      shell: bash
+      run: |
+        set -euo pipefail
+        if grep -q '^distributionSha256Sum=' gradle/wrapper/gradle-wrapper.properties; then
+          echo "gradle-wrapper.properties 已固定发行版 SHA-256"
+        else
+          echo "::error::gradle-wrapper.properties 缺少 distributionSha256Sum"
+          exit 1
+        fi
+
+    # ---------------------------------------------------------------
+    # 7. 汇总
+    #
+    # 注意：通过 env 传递各步骤 outcome，而不是把整个 steps 上下文
+    # 序列化进 shell（后者会引入引号/转义问题）。
+    # ---------------------------------------------------------------
+    - name: Summary
+      id: summary
+      if: always()
+      shell: bash
+      env:
+        POLICY: ${{ steps.policy.outcome }}
+        SELFTEST: ${{ steps.policy-selftest.outcome }}
+        UNIMPORTED: ${{ steps.unimported.outcome }}
+        VENDORED: ${{ steps.vendored.outcome }}
+        SECRETS: ${{ steps.secrets.outcome }}
+        APPINV: ${{ steps.app-invariants.outcome }}
+        WRAPPER: ${{ steps.wrapper.outcome }}
+      run: |
+        set -euo pipefail
+        failed=0
+        for o in "$POLICY" "$SELFTEST" "$UNIMPORTED" "$VENDORED" "$SECRETS" "$APPINV" "$WRAPPER"; do
+          [ "$o" = "failure" ] && failed=$((failed + 1))
+        done
+        echo "findings=${failed}" >> "$GITHUB_OUTPUT"
+        if [ "${failed}" -eq 0 ]; then
+          echo "result=pass" >> "$GITHUB_OUTPUT"
+        else
+          echo "result=fail" >> "$GITHUB_OUTPUT"
+        fi
+        {
+          echo "### GoGoGo Security Gate"
+          echo
+          echo "| 检查项 | 结果 |"
+          echo "|---|---|"
+          echo "| Workflow policy (R1–R8) | ${POLICY} |"
+          echo "| Checker self-test | ${SELFTEST} |"
+          echo "| Unimported symbols | ${UNIMPORTED} |
+          | Vendored checksums | ${VENDORED} |"
+          echo "| Secret scan | ${SECRETS} |"
+          echo "| App hardening invariants | ${APPINV} |"
+          echo "| Gradle wrapper hash | ${WRAPPER} |"
+          echo
+          echo "失败项：${failed}"
+        } >> "$GITHUB_STEP_SUMMARY"
+        if [ "${failed}" -ne 0 ]; then
+          exit 1
+        fi
+ || true)
+        if [ -n "$UNDECLARED" ]; then
+          echo "::error::以下权限在运行时被申请但未在清单中声明（申请必然失败）："
+          printf '%s\n' "$UNDECLARED" | sed 's/^/    /'
+          fail=1
+        else
+          echo "  ok   运行时申请的权限均已在清单声明"
+        fi
         # F-06：自更新必须存在完整性校验
         assert "UpdateVerifier 存在" test -f "$APP/com/zcshou/gogogo/UpdateVerifier.java"
         assert "更新前校验 SHA-256" grep -q 'hashEquals' "$APP/com/zcshou/gogogo/MainActivity.java"

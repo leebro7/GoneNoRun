@@ -102,17 +102,16 @@ public class WelcomeActivity extends AppCompatActivity {
         }
 
         /*
-         * 读写权限和电话状态权限非必要权限(建议授予)只会申请一次，用户同意或者禁止，只会弹一次
+         * 权限最小化（原则 3 / F-05）
+         *
+         * 此处原先还会申请「外部存储读取」与「电话状态」两项权限，现均已连同
+         * AndroidManifest.xml 中的声明一并移除，原因分别是：
+         *   - 外部存储读取：日志已迁入应用内部存储，不再需要
+         *   - 电话状态：代码中从未使用，属历史遗留
+         *
+         * 运行时申请未在清单中声明的权限必然被系统拒绝，且会弹出无意义的授权
+         * 对话框。因此这里只申请核心功能真正需要的前景定位权限。
          */
-        // 读写权限
-        if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            ReqPermissions.add(Manifest.permission.READ_EXTERNAL_STORAGE);
-        }
-
-        // 读取电话状态权限
-        if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
-            ReqPermissions.add(Manifest.permission.READ_PHONE_STATE);
-        }
 
         if (ReqPermissions.isEmpty()) {
             isPermission = true;
