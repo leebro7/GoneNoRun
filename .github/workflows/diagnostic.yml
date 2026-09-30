@@ -1,0 +1,81 @@
+name: Diagnostic
+
+# 临时诊断 workflow：把关键检查的输出推到一个分支，
+# 以便在没有 admin 权限、读不到 Actions 日志的情况下定位失败原因。
+#
+# 这不是常规 CI：它用 contents: write 推送一个 orphan 分支。
+# 定位完成后应删除本 workflow 与 diagnostic-output 分支。
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/libs/**'
+      - 'app/build.gradle'
+      - '.github/workflows/diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    name: Collect diagnostics
+    runs-on: ubuntu-latest
+    # 写权限只用于推送诊断分支，下沉到作业级
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Run checks and capture output
+        run: |
+          set +e
+          OUT="${RUNNER_TEMP}/diag.txt"
+          {
+            echo "=== git HEAD ==="
+            git rev-parse HEAD
+            echo
+            echo "=== app/libs listing ==="
+            ls -la app/libs
+            echo "--- arm64-v8a ---"
+            ls -la app/libs/arm64-v8a
+            echo
+            echo "=== manifest (first 20 lines, cat -A to expose hidden chars) ==="
+            head -20 app/libs/VENDORED_DEPENDENCIES.sha256 | cat -A
+            echo
+            echo "=== sha256sum -c (cwd=app/libs) ==="
+            ( cd app/libs && sha256sum -c VENDORED_DEPENDENCIES.sha256 )
+            echo "sha256sum exit=$?"
+            echo
+            echo "=== which sha256sum ==="
+            command -v sha256sum
+            sha256sum --version | head -1
+            echo
+            echo "=== ANDROID_HOME ==="
+            echo "ANDROID_HOME=${ANDROID_HOME}"
+            echo "--- build-tools ---"; ls "${ANDROID_HOME}/build-tools" 2>&1
+            echo "--- platforms ---";   ls "${ANDROID_HOME}/platforms" 2>&1
+            echo "--- ndk ---";         ls "${ANDROID_HOME}/ndk" 2>&1
+            echo
+            echo "=== gradle: verifyVendoredDependencies (full output) ==="
+            chmod +x gradlew
+            ./gradlew verifyVendoredDependencies --stacktrace --no-daemon 2>&1 | tail -80
+            echo "gradle exit=$?"
+          } > "$OUT" 2>&1
+          cat "$OUT"
+          cp "$OUT" "${GITHUB_WORKSPACE}/diag-output.txt"
+
+      - name: Publish diagnostics to a branch
+        run: |
+          set -euo pipefail
+          git config user.email "diagnostic@users.noreply.github.com"
+          git config user.name "diagnostic-bot"
+          git checkout --orphan diagnostic-output
+          git rm -rf --cached . >/dev/null 2>&1 || true
+          git add -f diag-output.txt
+          git commit -m "diagnostic output for ${GITHUB_SHA}"
+          git push -f origin diagnostic-output
