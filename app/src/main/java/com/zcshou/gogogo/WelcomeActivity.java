@@ -6,9 +6,7 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.TextPaint;
@@ -39,6 +37,15 @@ public class WelcomeActivity extends AppCompatActivity {
     private static final String KEY_ACCEPT_PRIVACY = "KEY_ACCEPT_PRIVACY";
 
     private static final int SDK_PERMISSION_REQUEST = 127;
+
+    /**
+     * 本次界面生命周期内是否已经发起过定位权限申请。
+     *
+     * 用途是区分「还没问过」与「问过但被拒绝」：前者应当弹一次系统授权框，
+     * 后者绝不能再弹（系统也不会弹）—— 否则用户会被卡在「点了没反应」的循环里。
+     * 权限不是拦路虎：拿不到也照样放行，只是相应功能降级。
+     */
+    private boolean permissionRequested = false;
 
     private CheckBox checkBox;
     private Boolean mAgreement;
@@ -99,23 +106,25 @@ public class WelcomeActivity extends AppCompatActivity {
                 Manifest.permission.ACCESS_COARSE_LOCATION,
                 this::shouldShowRequestPermissionRationale);
 
+        /*
+         * 判定结果的用途是「怎么告诉用户」，**不是**「放不放行」。
+         *
+         * 放行原则（用户明确要求：取得合适的权限就放行，不当拦路虎）：
+         *   精确位置、大致位置都算取得了合适的权限，直接放行、不打扰；
+         *   一项都没拿到也只做非阻塞提示，绝不弹模态框把用户堵在欢迎页。
+         */
         switch (outcome) {
             case ALL_GRANTED:
-                // 已满足进入条件，等待用户点击「进入应用」
-                break;
             case APPROXIMATE_ONLY:
-                // Android 12+：用户选了「大致位置」。可再次弹框让用户改选精确位置。
-                showPermissionDialog(R.string.app_permission_approximate_title,
-                        R.string.app_permission_approximate, true);
+                // 「精确」或「大致」都已满足；后者的精度差异不在这里唠叨
+                XLog.d("定位权限申请结果：" + outcome);
                 break;
             case RETRYABLE:
-                // 仍可再次弹框，用户点「进入应用」即可重试
                 GoUtils.DisplayToast(this, getResources().getString(R.string.app_error_permission));
                 break;
             case BLOCKED:
-                // 永久拒绝：系统不会再弹框，必须给出跳转系统设置的出口
-                showPermissionDialog(R.string.app_permission_blocked_title,
-                        R.string.app_permission_blocked, false);
+                // 永久拒绝只提示一句（含去哪里开启），不弹框、不阻断进入
+                GoUtils.DisplayToast(this, getResources().getString(R.string.app_permission_blocked));
                 break;
             case UNUSABLE:
             default:
@@ -167,46 +176,28 @@ public class WelcomeActivity extends AppCompatActivity {
             return;
         }
 
+        // 记下「已经问过」：之后即使用户拒绝，也只会放行 + 提示，不再反复弹框
+        permissionRequested = true;
         requestPermissions(reqPermissions.toArray(new String[0]), SDK_PERMISSION_REQUEST);
     }
 
-    /** 是否已获得精确位置（进入主界面的通过条件）。 */
-    private boolean hasPreciseLocation() {
+    /**
+     * 是否已取得可用的定位权限。
+     *
+     * 精确与大致都算数：Android 12+ 的授权框允许用户只选「大致位置」，
+     * 那是用户的正当选择 —— 只给大致位置也要放行，不能因此把人挡在门外。
+     */
+    private boolean hasLocationPermission() {
         return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
+                || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
     }
 
-    /**
-     * 权限被永久拒绝 / 只有大致位置时的可操作引导。
-     *
-     * @param allowRetry 是否提供「重新授权」。永久拒绝时系统不会再弹框，
-     *                   给了按钮也只会原地打转，因此只在「仅大致位置」时提供。
-     */
-    private void showPermissionDialog(int titleRes, int messageRes, boolean allowRetry) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this)
-                .setTitle(titleRes)
-                .setMessage(messageRes)
-                .setPositiveButton(R.string.app_permission_open_settings,
-                        (dialog, which) -> openAppSettings());
-        if (allowRetry) {
-            builder.setNegativeButton(R.string.app_permission_retry,
-                    (dialog, which) -> checkDefaultPermissions());
-        } else {
-            builder.setNegativeButton(R.string.app_permission_cancel, null);
-        }
-        builder.show();
-    }
-
-    /** 跳转到本应用的系统设置页（权限开关所在位置）。 */
-    private void openAppSettings() {
-        try {
-            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:" + getPackageName()));
-            startActivity(intent);
-        } catch (Exception e) {
-            XLog.e("无法打开应用设置页", e);
-            GoUtils.DisplayToast(this, getResources().getString(R.string.app_error_permission));
-        }
+    private void enterMainActivity() {
+        Intent intent = new Intent(WelcomeActivity.this, MainActivity.class);
+        startActivity(intent);
+        WelcomeActivity.this.finish();
     }
 
     private void startMainActivity() {
@@ -226,14 +217,17 @@ public class WelcomeActivity extends AppCompatActivity {
         }
 
         /*
-         * 不再依赖静态缓存：原实现授权后把 isPermission 置为 static true，
-         * 用户再到系统设置里撤销权限时该值依旧为 true，应用会「带伤进入」主界面，
-         * 定位静默失效且没有任何提示。现在每次都按系统当前状态现查现判。
+         * 权限不拦路（每次点「进入应用」都按系统当前状态现查现判，不缓存结论）：
+         *   - 拿到定位权限（精确或大致）          -> 直接放行；
+         *   - 一个都没拿到，但本次已经问过了      -> 仍然放行，只做一次非阻塞提示；
+         *   - 还没问过                            -> 先弹一次系统授权框。
+         * 这样既不会「带伤进入」，也不会出现「点了没反应」的死循环。
          */
-        if (hasPreciseLocation()) {
-            Intent intent = new Intent(WelcomeActivity.this, MainActivity.class);
-            startActivity(intent);
-            WelcomeActivity.this.finish();
+        if (hasLocationPermission()) {
+            enterMainActivity();
+        } else if (permissionRequested) {
+            GoUtils.DisplayToast(this, getResources().getString(R.string.app_permission_missing));
+            enterMainActivity();
         } else {
             checkDefaultPermissions();
         }

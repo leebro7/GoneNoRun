@@ -76,7 +76,7 @@
 | `setting_author` 在 `preferences_main.xml` 声明但无代码引用 | 无效设置项 | `preferences_main.xml:98-103` | ⚠️ 已记录，未改（纯 UI 冗余） |
 | `REPLACE_EXISTING_PACKAGE` 并非有效 Android 权限常量 | 无效声明，扩大审计面 | 旧 `AndroidManifest.xml:22` | ✅ 已移除 |
 | `GoApplication` 在用户点击同意前即调用 `SDKInitializer.setAgreePrivacy(this, true)` | 合规隐患（告知同意顺序） | `GoApplication.java:33-35` | ⚠️ **未改**，见 §3 |
-| 欢迎页定位权限申请（实机反馈「授予了权限仍提示『权限不足，请授予相关权限』」）：① 回调用**跨次累积且从不清理的静态列表下标**去索引系统 `grantResults`；② 被永久拒绝后只 toast 一句提示，不给任何出口；③ Android 12+ 的「仅大致位置」被当成完全拒绝；④ 进入条件依赖 `static` 缓存，权限被撤销后仍放行 | **功能阻断 + 越界**：请求重叠时 `ArrayIndexOutOfBoundsException`；永久拒绝、仅大致位置的用户被永久锁在欢迎页；权限被撤销后「带伤进入」主界面且定位静默失效 | 旧 `WelcomeActivity.java:78-86`（静态 `ReqPermissions` / `isPermission`）、`strings.xml:32` | ✅ 判定抽为纯逻辑 `app/src/main/java/com/zcshou/utils/PermissionGate.java`（显式判定表 + `PermissionGateTest`）；按「精确位置 / 仅大致位置 / 可再申请 / 永久拒绝 / 数据不可用」分流，后两者弹出可跳转系统设置的对话框；待申请列表改为局部变量、回调只信任系统返回数组；进入条件改为现查现判 |
+| 欢迎页定位权限申请（实机反馈「授予了权限仍提示『权限不足，请授予相关权限』」）：① 回调用**跨次累积且从不清理的静态列表下标**去索引系统 `grantResults`；② 被永久拒绝后只 toast 一句提示，不给任何出口；③ Android 12+ 的「仅大致位置」被当成完全拒绝；④ 进入条件依赖 `static` 缓存，权限被撤销后仍放行 | **功能阻断 + 越界**：请求重叠时 `ArrayIndexOutOfBoundsException`；永久拒绝、仅大致位置的用户被永久锁在欢迎页；权限被撤销后「带伤进入」主界面且定位静默失效 | 旧 `WelcomeActivity.java:78-86`（静态 `ReqPermissions` / `isPermission`）、`strings.xml:32` | ✅ 判定抽为纯逻辑 `app/src/main/java/com/zcshou/utils/PermissionGate.java`（显式判定表 + `PermissionGateTest`）；待申请列表改为局部变量、回调只信任系统返回数组；进入条件现查现判。**权限不再拦截进入**：取得精确或大致位置即放行，一项都没拿到也只做一次非阻塞提示后放行（只降级地图定位，模拟定位不受运行时定位权限影响），全程不弹模态框；仅「还没问过」时才走一次系统授权框，避免「点了没反应」的死循环 |
 
 ---
 

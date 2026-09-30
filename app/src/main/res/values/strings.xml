@@ -31,14 +31,13 @@
     <string name="app_error_network">网络不可用，请检查网络连接</string>
     <string name="app_error_permission">权限不足，请授予相关权限</string>
 
-    <!-- 运行时权限引导（欢迎页）：按不同的拒绝形态给出可操作的出口 -->
-    <string name="app_permission_approximate_title">需要「精确位置」权限</string>
-    <string name="app_permission_approximate">当前只有「大致位置」权限。模拟定位需要精确位置：请重新授权并选择「精确」，或到系统设置 → 权限 → 位置信息 中开启「使用精确位置」。</string>
-    <string name="app_permission_blocked_title">定位权限已被拒绝</string>
-    <string name="app_permission_blocked">系统已不再弹出定位授权框（被拒绝两次或选择了「不再询问」）。请到系统设置 → 权限 → 位置信息 中手动允许，然后返回重试。</string>
-    <string name="app_permission_open_settings">打开设置</string>
-    <string name="app_permission_retry">重新授权</string>
-    <string name="app_permission_cancel">取消</string>
+    <!--
+      运行时权限提示（欢迎页）
+      策略：权限只让功能降级，不拦截进入 —— 取得权限（精确或大致）即放行；
+      未取得也只提示一句。因此这里只有非阻塞的 toast 文案，没有对话框。
+    -->
+    <string name="app_permission_blocked">定位权限已被拒绝，可在系统设置 → 权限 → 位置信息 中开启；模拟定位不受影响</string>
+    <string name="app_permission_missing">未获得定位权限：地图定位不可用，模拟定位不受影响。可在系统设置 → 权限 中开启</string>
     <string name="app_error_input">输入有误，请检查输入是否合法</string>
     <string name="app_error_input_null">输入不能为空，请重新输入内容</string>
     <string name="app_error_search">查找失败，请检查网络或定位</string>
