@@ -26,8 +26,16 @@ def signingValue = { String envName, String propName ->
 }
 
 android {
-    ndkVersion = '26.2.11394342'
-    compileSdk = 32
+    // 修正说明（依据 CI 实测诊断，而非推测）：
+    //   * 原先声明 ndkVersion = '26.2.11394342'，但本模块**没有任何原生源码**
+    //     （app/src 下无 .c/.cpp/CMakeLists.txt），.so 是已入库的预编译产物。
+    //     该声明纯属多余，且在 NDK 未安装的 runner 上会直接报错。
+    //   * 原先 compileSdk = 32，但 CI runner 预装的平台最低为 android-34，
+    //     导致找不到 android-32 平台。buildToolsVersion 早已是 36.0.0，
+    //     两者本来就不匹配。
+    //   * 改动范围刻意收窄：只提升 compileSdk（影响编译期可用 API 与清单合并），
+    //     **不动 targetSdk**（保持 32），避免改变运行时行为。
+    compileSdk = 36
     buildToolsVersion = '36.0.0'
     namespace = 'com.zcshou.gogogo'
 

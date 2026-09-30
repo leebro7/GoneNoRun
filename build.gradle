@@ -26,23 +26,23 @@ allprojects {
     // -----------------------------------------------------------------------
     // 依赖校验与锁定（F-04）
     //
-    // 依赖校验元数据在 CI 中强制开启，本地可通过
-    //   -Pgogogo.verifyDependencies=true
-    // 启用同一策略，避免 CI 与本地行为不一致。
-    // 元数据文件：gradle/verification-metadata.xml（由维护者执行
-    //   ./gradlew --write-verification-metadata sha256 help
-    // 生成并提交，需人工审查 diff）
+    // 修正说明：早期版本在这里写了 dependencyVerification { } 与
+    // dependencyLocking { }，两者在 Project 上都不是合法方法，会导致
+    // 配置阶段直接失败：
+    //
+    //   Could not find method dependencyVerification() ...
+    //     at build.gradle:36
+    //
+    // Gradle 的实际机制是：
+    //   * 依赖校验 —— 读取 gradle/verification-metadata.xml（若存在），
+    //     并以 --dependency-verification=strict 开启严格模式；不需要 DSL。
+    //   * 依赖锁定 —— 由 --write-locks 生成 gradle.lockfile，
+    //     或对具体配置调用 Configuration#resolutionStrategy.activateDependencyLocking()。
+    //
+    // 因此这里不再声明任何东西。仓库内**尚未**提交 verification-metadata.xml
+    // 与 gradle.lockfile（需 JDK 生成，见 docs/SECURITY-HARDENING.md §4 V-5/V-6）。
+    // 生成后 Gradle 会自动使用，无需改本文件。
     // -----------------------------------------------------------------------
-    dependencyVerification {
-        verifyMetadata = providers.gradleProperty('gogogo.verifyDependencies')
-                .map { it.toBoolean() }
-                .getOrElse(false)
-    }
-
-    // 依赖锁定，确保可重现构建
-    dependencyLocking {
-        lockAllConfigurations()
-    }
 
     gradle.projectsEvaluated {
         tasks.withType(JavaCompile).tap {
