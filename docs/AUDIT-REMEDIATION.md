@@ -76,6 +76,7 @@
 | `setting_author` 在 `preferences_main.xml` 声明但无代码引用 | 无效设置项 | `preferences_main.xml:98-103` | ⚠️ 已记录，未改（纯 UI 冗余） |
 | `REPLACE_EXISTING_PACKAGE` 并非有效 Android 权限常量 | 无效声明，扩大审计面 | 旧 `AndroidManifest.xml:22` | ✅ 已移除 |
 | `GoApplication` 在用户点击同意前即调用 `SDKInitializer.setAgreePrivacy(this, true)` | 合规隐患（告知同意顺序） | `GoApplication.java:33-35` | ⚠️ **未改**，见 §3 |
+| 欢迎页定位权限申请（实机反馈「授予了权限仍提示『权限不足，请授予相关权限』」）：① 回调用**跨次累积且从不清理的静态列表下标**去索引系统 `grantResults`；② 被永久拒绝后只 toast 一句提示，不给任何出口；③ Android 12+ 的「仅大致位置」被当成完全拒绝；④ 进入条件依赖 `static` 缓存，权限被撤销后仍放行 | **功能阻断 + 越界**：请求重叠时 `ArrayIndexOutOfBoundsException`；永久拒绝、仅大致位置的用户被永久锁在欢迎页；权限被撤销后「带伤进入」主界面且定位静默失效 | 旧 `WelcomeActivity.java:78-86`（静态 `ReqPermissions` / `isPermission`）、`strings.xml:32` | ✅ 判定抽为纯逻辑 `app/src/main/java/com/zcshou/utils/PermissionGate.java`（显式判定表 + `PermissionGateTest`）；按「精确位置 / 仅大致位置 / 可再申请 / 永久拒绝 / 数据不可用」分流，后两者弹出可跳转系统设置的对话框；待申请列表改为局部变量、回调只信任系统返回数组；进入条件改为现查现判 |
 
 ---
 
@@ -128,6 +129,12 @@ test -f .github/CODEOWNERS && echo "OK: CODEOWNERS present"
 # 额外修复
 grep -n 'setting_history_expiration' app/src/main/java/com/zcshou/gogogo/HistoryActivity.java
 grep -n 'setting_log_off' app/src/main/java/com/zcshou/gogogo/GoApplication.java
+
+# 欢迎页权限申请判定（PermissionGate 无 Android 依赖，可脱离 SDK 验证）
+node scripts/check-unimported-symbols.mjs      # 无编译器时的导入检查
+node scripts/check-xml-structure.mjs           # strings.xml 未破坏 XML 结构
+javac -d /tmp/pg app/src/main/java/com/zcshou/utils/PermissionGate.java \
+  && echo "OK: PermissionGate compiles without the Android SDK"
 ```
 
 ---
