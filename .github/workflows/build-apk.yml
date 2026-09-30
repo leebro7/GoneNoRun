@@ -79,6 +79,9 @@ jobs:
 
       # 不注入任何 Secret：secrets-gradle-plugin 允许缺省，
       # 地图功能在无 Key 的构建中不可用，但编译与打包正常。
+      # 无编译器环境下的左移检查：捕获「用了类却没 import」这类编译错误
+      - name: Unimported symbol check
+        run: node scripts/check-unimported-symbols.mjs
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
 

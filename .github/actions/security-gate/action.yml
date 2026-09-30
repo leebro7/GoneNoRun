@@ -70,6 +70,19 @@ runs:
         echo "::endgroup::"
 
     # ---------------------------------------------------------------
+    # 2b. 未导入符号检查（无编译器时的左移手段）
+    #     本项目多次因「用了类却没 import」而编译失败，例如
+    #     Build.VERSION.SDK_INT 未导入 android.os.Build。
+    # ---------------------------------------------------------------
+    - name: Unimported symbol check
+      id: unimported
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Unimported symbols"
+        node scripts/check-unimported-symbols.mjs
+        echo "::endgroup::"
+    # ---------------------------------------------------------------
     # 3. vendored 二进制依赖完整性（Gradle locking 覆盖不到 fileTree/files）
     # ---------------------------------------------------------------
     - name: Vendored dependency checksums
@@ -278,6 +291,7 @@ runs:
       env:
         POLICY: ${{ steps.policy.outcome }}
         SELFTEST: ${{ steps.policy-selftest.outcome }}
+        UNIMPORTED: ${{ steps.unimported.outcome }}
         VENDORED: ${{ steps.vendored.outcome }}
         SECRETS: ${{ steps.secrets.outcome }}
         APPINV: ${{ steps.app-invariants.outcome }}
@@ -285,7 +299,7 @@ runs:
       run: |
         set -euo pipefail
         failed=0
-        for o in "$POLICY" "$SELFTEST" "$VENDORED" "$SECRETS" "$APPINV" "$WRAPPER"; do
+        for o in "$POLICY" "$SELFTEST" "$UNIMPORTED" "$VENDORED" "$SECRETS" "$APPINV" "$WRAPPER"; do
           [ "$o" = "failure" ] && failed=$((failed + 1))
         done
         echo "findings=${failed}" >> "$GITHUB_OUTPUT"
@@ -301,7 +315,8 @@ runs:
           echo "|---|---|"
           echo "| Workflow policy (R1–R8) | ${POLICY} |"
           echo "| Checker self-test | ${SELFTEST} |"
-          echo "| Vendored checksums | ${VENDORED} |"
+          echo "| Unimported symbols | ${UNIMPORTED} |
+          | Vendored checksums | ${VENDORED} |"
           echo "| Secret scan | ${SECRETS} |"
           echo "| App hardening invariants | ${APPINV} |"
           echo "| Gradle wrapper hash | ${WRAPPER} |"
