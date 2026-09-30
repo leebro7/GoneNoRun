@@ -65,7 +65,7 @@ jobs:
       - name: Provide empty local.properties (no secrets)
         run: |
           if [ ! -f local.properties ]; then
-            printf "MAPS_API_KEY=\nMAPS_SAFE_CODE=\n" > local.properties
+            printf "MAPS_API_KEY=PLACEHOLDER\nMAPS_SAFE_CODE=PLACEHOLDER\n" > local.properties
           fi
           echo "local.properties present (placeholder values)"
       - name: Assemble

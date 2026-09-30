@@ -6,6 +6,33 @@ plugins {
 }
 
 // ---------------------------------------------------------------------------
+// 地图 Key 的默认值（必须非空）
+//
+// 依据 CI 实测：无密钥构建会生成非法的 BuildConfig，编译直接失败：
+//
+//   BuildConfig.java:12: error: illegal start of expression
+//     public static final String MAPS_API_KEY = ;
+//
+// 原因有两层，都必须处理：
+//   1. secrets-gradle-plugin 在 local.properties 不存在时会让**配置阶段**失败
+//      （The file .../local.properties could not be found）。
+//   2. 即使文件存在，若键值为空字符串，插件会生成 `= ;`，仍是非法 Java。
+//
+// 这里为缺失的键提供非空占位；CI 中真实 Secret 通过 local.properties 注入并
+// 覆盖这些默认值。空字符串不能作为默认值。
+// ---------------------------------------------------------------------------
+secrets {
+    propertiesFileName = 'local.properties'
+    // 显式默认值，保证 BuildConfig 字段始终是合法的非空字符串字面量。
+    // 不设置 defaultPropertiesFileName：默认值只来自这里，避免与
+    // keystore.properties（签名凭据）混淆。
+    defaultProperties = [
+            MAPS_API_KEY   : 'PLACEHOLDER_MAPS_API_KEY',
+            MAPS_SAFE_CODE : 'PLACEHOLDER_MAPS_SAFE_CODE',
+    ]
+}
+
+// ---------------------------------------------------------------------------
 // 签名凭据加载策略（零信任：仓库内不得存在任何签名凭据）
 //
 // 优先级：

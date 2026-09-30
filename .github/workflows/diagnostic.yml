@@ -59,7 +59,7 @@ jobs:
             echo
             # 与 build-apk.yml 保持一致：插件在 local.properties 缺失时会让配置阶段失败
             if [ ! -f local.properties ]; then
-              printf "MAPS_API_KEY=\nMAPS_SAFE_CODE=\n" > local.properties
+              printf "MAPS_API_KEY=PLACEHOLDER\nMAPS_SAFE_CODE=PLACEHOLDER\n" > local.properties
             fi
             echo "local.properties created: $(test -f local.properties && echo yes || echo no)"
             echo
