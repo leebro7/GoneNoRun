@@ -1,0 +1,313 @@
+name: 'GoGoGo Security Gate'
+description: >-
+  对加固基线执行仓库级安全断言：工作流策略（R1–R7）、vendored 依赖完整性、
+  全历史密钥泄露、以及应用侧安全不变量。任一失败即让作业失败。
+author: 'GoGoGo Security Baseline'
+
+# 复合 Action：无第三方依赖，全部逻辑由仓库内脚本与 shell 构成，
+# 因此该 Action 自身不引入新的供应链风险（原则 10）。
+#
+# 用法：
+#   - uses: ./.github/actions/security-gate
+#     with:
+#       fail-on-secret: 'true'
+
+inputs:
+  fail-on-secret:
+    description: '发现密钥泄露时是否使作业失败'
+    required: false
+    default: 'true'
+  node-version:
+    description: '用于运行校验脚本的 Node.js 版本'
+    required: false
+    default: '20'
+  check-app-invariants:
+    description: '是否执行应用侧安全不变量检查'
+    required: false
+    default: 'true'
+
+outputs:
+  result:
+    description: "总体结果：'pass' 或 'fail'"
+    value: ${{ steps.summary.outputs.result }}
+  findings:
+    description: '失败项数量'
+    value: ${{ steps.summary.outputs.findings }}
+
+runs:
+  using: 'composite'
+  steps:
+    # ---------------------------------------------------------------
+    # 0. 准备 Node（校验脚本用 Node 编写，避免依赖 python/jq 等）
+    # ---------------------------------------------------------------
+    - name: Set up Node.js
+      uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    # ---------------------------------------------------------------
+    # 1. 工作流策略：R1–R7（SHA 固定、最小权限、审批闸门、无密钥入库）
+    # ---------------------------------------------------------------
+    - name: Workflow policy (R1-R7)
+      id: policy
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Workflow policy"
+        node scripts/check-workflow-policy.mjs
+        echo "::endgroup::"
+
+    # ---------------------------------------------------------------
+    # 2. 校验器自身的对抗性测试 —— 未经负向测试的校验器无法证明其有效
+    # ---------------------------------------------------------------
+    - name: Policy checker self-test (negative cases)
+      id: policy-selftest
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Policy checker adversarial tests"
+        node scripts/check-workflow-policy.test.mjs
+        echo "::endgroup::"
+
+    # ---------------------------------------------------------------
+    # 3. vendored 二进制依赖完整性（Gradle locking 覆盖不到 fileTree/files）
+    # ---------------------------------------------------------------
+    - name: Vendored dependency checksums
+      id: vendored
+      shell: bash
+      working-directory: app/libs
+      run: |
+        set -euo pipefail
+        echo "::group::Vendored dependencies"
+        sha256sum -c VENDORED_DEPENDENCIES.sha256
+        echo "::endgroup::"
+
+    # ---------------------------------------------------------------
+    # 4. 全历史密钥扫描（文件名黑名单 + 硬编码凭据模式）
+    #    只报告类型与位置，不回显任何疑似明文。
+    # ---------------------------------------------------------------
+    - name: Secret scan (tracked files + full history)
+      id: secrets
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Secret scan"
+        fail=0
+
+        # 4a. 文件名黑名单：密钥库类文件不得被跟踪
+        if git ls-files | grep -Ei '\.(jks|keystore|p12|pfx|pem|key|der|bks|pepk)$|(^|/)keystore\.properties$'; then
+          echo "::error::检测到密钥库类文件被纳入版本控制（仅报告路径）"
+          fail=1
+        fi
+
+        # 4b. 全历史：任何提交中出现过密钥库类文件
+        if git log --all --name-only --pretty=format: | sort -u \
+             | grep -Ei '\.(jks|keystore|p12|pfx|pem|key)$'; then
+          echo "::error::历史提交中存在密钥库类文件"
+          fail=1
+        fi
+
+        # 4c. 构建脚本中的硬编码签名口令
+        if git grep -nE "(storePassword|keyPassword)\s*['\"][^'\"]{3,}['\"]" \
+             -- '*.gradle' '*.gradle.kts' 'gradle.properties'; then
+          echo "::error::构建脚本中出现硬编码签名口令"
+          fail=1
+        fi
+
+        # 4d. 提交对象中的 PEM 私钥标记
+        if git grep -qE 'BEGIN (RSA |ENCRYPTED )?PRIVATE KEY' -- . 2>/dev/null; then
+          echo "::error::提交内容中存在 PEM 私钥标记"
+          fail=1
+        fi
+
+        if [ "$fail" -ne 0 ] && [ "${{ inputs.fail-on-secret }}" = "true" ]; then
+          echo "::endgroup::"
+          exit 1
+        fi
+        echo "密钥扫描通过（未发现密钥材料）"
+        echo "::endgroup::"
+
+    # ---------------------------------------------------------------
+    # 5. 应用侧安全不变量：确认加固控制未被回退
+    #    这些断言直接对应审计发现 F-05 / F-06 / F-08 / F-09。
+    # ---------------------------------------------------------------
+    - name: App hardening invariants
+      id: app-invariants
+      if: ${{ inputs.check-app-invariants == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::App hardening invariants"
+        fail=0
+        assert() { # assert <描述> <命令...>
+          local desc="$1"; shift
+          if "$@" >/dev/null 2>&1; then
+            echo "  ok   ${desc}"
+          else
+            echo "::error::不变量被破坏: ${desc}"
+            fail=1
+          fi
+        }
+        assert_not() { # 成立则失败
+          local desc="$1"; shift
+          if "$@" >/dev/null 2>&1; then
+            echo "::error::不变量被破坏: ${desc}"
+            fail=1
+          else
+            echo "  ok   ${desc}"
+          fi
+        }
+
+        MANIFEST=app/src/main/AndroidManifest.xml
+        NSC=app/src/main/res/xml/network_security_config.xml
+        PATHS=app/src/main/res/xml/provider_paths.xml
+        APP=app/src/main/java
+
+        # 注意：以下断言必须针对「真实声明/代码」，而不是注释。
+        # 这些文件里保留了解释性注释（说明历史上移除过什么），如果直接对
+        # 全文 grep 关键词，会被注释误命中并产生假失败。
+        # 因此统一先剥离 XML/Java 注释，再断言。
+        #
+        # 关键：不要通过 shell 变量传递剥离后的内容再 grep。
+        # 实测中发现 `printf '%s' "$VAR" | grep -q PATTERN` 会对这些内容
+        # 静默返回「不匹配」（grep 的内容启发式把含非 UTF-8 序列/超长行的
+        # 输入当作二进制或提前退出），而 `grep -c` 却报 1 —— 这会造成
+        # 静默漏检，比报错更危险。改用进程替换 + `grep -a` 强制按文本处理。
+        strip_xml() {
+          perl -0777 -pe 's/<!--.*?-->//gs' "$1" 2>/dev/null \
+            || sed -e ':a' -e 's/<!--[^>]*-->//g' "$1"
+        }
+        strip_java() {
+          perl -0777 -pe 's{/\*.*?\*/}{}gs; s{//[^\n]*}{}g' \
+            $(find "$APP" -name '*.java') 2>/dev/null
+        }
+
+        # F-05：特权/多余权限不得作为 uses-permission 回归
+        for p in READ_LOGS WRITE_SETTINGS MOUNT_UNMOUNT_FILESYSTEMS \
+                 ACCESS_MOCK_LOCATION REPLACE_EXISTING_PACKAGE READ_PHONE_STATE \
+                 ACCESS_BACKGROUND_LOCATION; do
+          if grep -a -q "uses-permission[^>]*${p}" <(strip_xml "$MANIFEST"); then
+            echo "::error::权限 ${p} 重新出现在 uses-permission 声明中"
+            fail=1
+          else
+            echo "  ok   权限 ${p} 未被声明"
+          fi
+        done
+
+        # F-05：备份必须禁用
+        assert "allowBackup=false" grep -q 'android:allowBackup="false"' "$MANIFEST"
+        # F-05：不得再使用 legacy 外部存储
+        assert_not "requestLegacyExternalStorage 已移除" \
+          grep -q 'requestLegacyExternalStorage' "$MANIFEST"
+
+        # F-08：默认禁止明文流量
+        assert "明文流量默认禁止" grep -q 'base-config cleartextTrafficPermitted="false"' "$NSC"
+        # F-08：NSC 已被清单引用
+        assert "清单引用 networkSecurityConfig" \
+          grep -q 'android:networkSecurityConfig="@xml/network_security_config"' "$MANIFEST"
+
+        # F-09：FileProvider 不得暴露宽泛路径（剥离注释后判断）
+        if grep -a -qE 'path="\."' <(strip_xml "$PATHS"); then
+          echo "::error::provider_paths 中出现 path=\".\"（范围过宽）"
+          fail=1
+        else
+          echo "  ok   provider_paths 无 path=\".\""
+        fi
+        if grep -a -q '<external-path' <(strip_xml "$PATHS"); then
+          echo "::error::provider_paths 中出现 <external-path>（范围过宽）"
+          fail=1
+        else
+          echo "  ok   provider_paths 无 external-path"
+        fi
+
+        # F-05：应用代码不得再调用外部存储 API（剥离注释后判断）
+        if grep -a -q 'getExternalFilesDir' <(strip_java); then
+          echo "::error::应用代码仍调用 getExternalFilesDir"
+          fail=1
+        else
+          echo "  ok   应用代码无 getExternalFilesDir 调用"
+        fi
+
+        # F-06：自更新必须存在完整性校验
+        assert "UpdateVerifier 存在" test -f "$APP/com/zcshou/gogogo/UpdateVerifier.java"
+        assert "更新前校验 SHA-256" grep -q 'hashEquals' "$APP/com/zcshou/gogogo/MainActivity.java"
+        assert "更新前校验签名证书" grep -q 'isSignedBySameKey' "$APP/com/zcshou/gogogo/MainActivity.java"
+        assert "按文件名精确匹配资产" grep -q 'expectedAssetName' "$APP/com/zcshou/gogogo/MainActivity.java"
+        assert "拒绝路径穿越" grep -q 'isSafeAssetFileName' "$APP/com/zcshou/gogogo/MainActivity.java"
+
+        # F-01：build.gradle 不得出现字面量签名口令
+        # （signingValue('ENV','propName') 形式的间接引用是允许的）
+        if grep -qE "(storePassword|keyPassword)\s*['\"][^'\"]{2,}['\"]" app/build.gradle; then
+          echo "::error::build.gradle 中出现字面量签名口令"
+          fail=1
+        else
+          echo "  ok   build.gradle 无字面量签名口令"
+        fi
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::endgroup::"
+          exit 1
+        fi
+        echo "::endgroup::"
+
+    # ---------------------------------------------------------------
+    # 6. Gradle 发行版哈希固定
+    # ---------------------------------------------------------------
+    - name: Gradle wrapper hash pinned
+      id: wrapper
+      shell: bash
+      run: |
+        set -euo pipefail
+        if grep -q '^distributionSha256Sum=' gradle/wrapper/gradle-wrapper.properties; then
+          echo "gradle-wrapper.properties 已固定发行版 SHA-256"
+        else
+          echo "::error::gradle-wrapper.properties 缺少 distributionSha256Sum"
+          exit 1
+        fi
+
+    # ---------------------------------------------------------------
+    # 7. 汇总
+    #
+    # 注意：通过 env 传递各步骤 outcome，而不是把整个 steps 上下文
+    # 序列化进 shell（后者会引入引号/转义问题）。
+    # ---------------------------------------------------------------
+    - name: Summary
+      id: summary
+      if: always()
+      shell: bash
+      env:
+        POLICY: ${{ steps.policy.outcome }}
+        SELFTEST: ${{ steps.policy-selftest.outcome }}
+        VENDORED: ${{ steps.vendored.outcome }}
+        SECRETS: ${{ steps.secrets.outcome }}
+        APPINV: ${{ steps.app-invariants.outcome }}
+        WRAPPER: ${{ steps.wrapper.outcome }}
+      run: |
+        set -euo pipefail
+        failed=0
+        for o in "$POLICY" "$SELFTEST" "$VENDORED" "$SECRETS" "$APPINV" "$WRAPPER"; do
+          [ "$o" = "failure" ] && failed=$((failed + 1))
+        done
+        echo "findings=${failed}" >> "$GITHUB_OUTPUT"
+        if [ "${failed}" -eq 0 ]; then
+          echo "result=pass" >> "$GITHUB_OUTPUT"
+        else
+          echo "result=fail" >> "$GITHUB_OUTPUT"
+        fi
+        {
+          echo "### GoGoGo Security Gate"
+          echo
+          echo "| 检查项 | 结果 |"
+          echo "|---|---|"
+          echo "| Workflow policy (R1–R7) | ${POLICY} |"
+          echo "| Checker self-test | ${SELFTEST} |"
+          echo "| Vendored checksums | ${VENDORED} |"
+          echo "| Secret scan | ${SECRETS} |"
+          echo "| App hardening invariants | ${APPINV} |"
+          echo "| Gradle wrapper hash | ${WRAPPER} |"
+          echo
+          echo "失败项：${failed}"
+        } >> "$GITHUB_STEP_SUMMARY"
+        if [ "${failed}" -ne 0 ]; then
+          exit 1
+        fi

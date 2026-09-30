@@ -61,6 +61,7 @@
 | 依赖校验元数据与锁定 | `build.gradle` 的 `dependencyVerification` / `dependencyLocking` | 元数据需维护者本地生成后提交（本环境无 JDK） |
 | Gradle 发行版哈希 | `gradle/wrapper/gradle-wrapper.properties` 的 `distributionSha256Sum` | 取自 services.gradle.org 官方校验文件 |
 | 策略即代码 | `scripts/check-workflow-policy.mjs` + 对抗性测试 | R1–R7 不变量，9 个负向用例全部通过 |
+| 加固不变量门禁 | `.github/actions/security-gate/action.yml` + `.github/workflows/security-gate.yml` | 复合 Action，无第三方依赖。在每次 push/PR 上强制执行：工作流策略、校验器自测、vendored 校验和、密钥扫描、应用侧安全不变量、Gradle wrapper 哈希。**已用 6 类人为回归验证其确实会阻断**（见 §2.6） |
 | 发布来源证明 | `scripts/gen-provenance.mjs` + `build-release.yml` 的签署步骤 | 生成 in-toto Statement / SLSA provenance v1 形式本体，覆盖源码提交、构建参数、制品 SHA-256、builder 与 invocation id，用发布密钥签名后随 Release 发布。**局限**：与 APK 同一信任根，属自证，不等同于 Sigstore keyless 或独立 KMS 证明。验证方法见 §2.5 |
 
 ### 2.5 验证发布来源证明
@@ -88,6 +89,38 @@ node -e 'const p=require("./provenance.json").predicate;
 ```
 
 已实测的负向验证：改动 APK 内容后，第 3 步哈希比对必然失配 —— 证明确实绑定了制品。
+
+### 2.6 Security Gate 的回归验证
+
+`.github/actions/security-gate/action.yml` 的价值取决于它能否真的拦住回退。
+以下 6 类人为回归已逐一验证会被阻断（在 `git archive HEAD` 的隔离副本上执行，
+不污染工作树）：
+
+| 回归 | 期望 | 实测 |
+|---|---|---|
+| 重新声明 `READ_LOGS` | 阻断 | ✅ `权限 READ_LOGS 重新出现在 uses-permission 声明中` |
+| 把 `cleartextTrafficPermitted` 改回 `true` | 阻断 | ✅ `不变量被破坏: 明文流量默认禁止` |
+| 把 FileProvider 改回 `path="."` | 阻断 | ✅ `provider_paths 中出现 path="."（范围过宽）` |
+| 删除安装前的 SHA-256 校验 | 阻断 | ✅ `不变量被破坏: 更新前校验 SHA-256` |
+| 在 `build.gradle` 硬编码签名口令 | 阻断 | ✅ `build.gradle 中出现字面量签名口令` |
+| 把日志写回 `getExternalFilesDir` | 阻断 | ✅ `应用代码仍调用 getExternalFilesDir` |
+
+#### 实现中记录的一个陷阱
+
+不变量断言需要先剥离 XML/Java 注释（文件内保留了解释性注释，说明历史上移除了
+什么），否则关键词会被注释误命中而产生**假失败**。但剥离后的内容**不能**经 shell
+变量再传给 `grep -q`：
+
+```bash
+# 错误：实测会静默返回「不匹配」，而 grep -c 却报 1 —— 导致静默漏检
+SRC=$(strip_java); printf '%s' "$SRC" | grep -q 'getExternalFilesDir'
+
+# 正确：进程替换 + -a 强制按文本处理
+grep -a -q 'getExternalFilesDir' <(strip_java)
+```
+
+该陷阱在开发过程中真实导致过一次漏检（上表第 6 行的回归最初未被发现），
+修复后 6/6 全部阻断。这也是为什么门禁本身必须有负向测试。
 
 ### 2.3 应用运行时（对应原则 1/3/4/8）
 

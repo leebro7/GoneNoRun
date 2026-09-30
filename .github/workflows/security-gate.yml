@@ -1,0 +1,54 @@
+name: Security Gate
+
+# 对 hardened 基线执行仓库级安全断言。
+#
+# 与 build-check.yml 的分工：
+#   * build-check.yml  —— 编译产物相关（需要 Android SDK），以及密钥扫描
+#   * security-gate.yml —— 纯静态不变量检查，不需 SDK，秒级完成，
+#                          因此可以在每次 push / PR 上无条件运行
+#
+# 不读取任何 Secret：deploy key 或任何写权限持有者都无法借此取得凭据。
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-gate:
+    name: Security Gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # 密钥扫描需要完整历史
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run security gate
+        id: gate
+        uses: ./.github/actions/security-gate
+        with:
+          fail-on-secret: 'true'
+          check-app-invariants: 'true'
+
+      - name: Report result
+        if: always()
+        run: |
+          echo "result=${{ steps.gate.outputs.result }}"
+          echo "findings=${{ steps.gate.outputs.findings }}"
