@@ -9,8 +9,12 @@
  *   * 仅使用 Node 内置能力，无第三方依赖。Node 在 CI 中由 setup-node 保证。
  *
  * 输入（环境变量）：
- *   APK_NAME, APK_SHA, GITHUB_REF_NAME, GITHUB_SERVER_URL,
- *   GITHUB_REPOSITORY, GITHUB_SHA, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, STARTED_ON
+ *   APK_NAME, APK_SHA, RELEASE_TAG（发布 tag，如 v1.12.3）,
+ *   GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_SHA,
+ *   GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, STARTED_ON
+ *
+ * 注意：不要用 GITHUB_REF_NAME 记录版本 —— 手动触发时它是分支名（如 main），
+ * 只有 tag 推送时才是 tag 名。发布版本应取 RELEASE_TAG。
  *
  * 输出：stdout 打印 JSON
  *
@@ -40,7 +44,8 @@ const doc = {
     buildDefinition: {
       buildType: 'https://github.com/ZCShou/GoGoGo/buildtypes/gradle-android@v1',
       externalParameters: {
-        versionName: e.GITHUB_REF_NAME || '',
+          releaseTag: e.RELEASE_TAG || '',
+          versionName: (e.RELEASE_TAG || '').replace(/^v/, ''),
         abi: 'arm64-v8a',
         gradleDistribution: '8.13',
       },

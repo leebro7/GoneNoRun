@@ -14,6 +14,11 @@ name: Build Release
 #   5. 生成 SHA-256 校验值并写入 Release 正文，供客户端自更新强制校验。
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的 tag（留空则按 v<versionName> 自动推导）'
+        required: false
+        default: ''
   push:
     tags:
       - 'v*'
@@ -42,21 +47,49 @@ jobs:
         with:
           persist-credentials: false
 
-      # 版本一致性：tag 必须与 app/build.gradle 的 versionName 一致。
-      # 客户端自更新按 tag 推导资产名（Go_<version>_arm64-v8a_release.apk），
-      # 若二者不一致，发布出去的 APK 永远不会被客户端匹配到，更新静默失效。
+      # 版本一致性：tag 必须等于 v<versionName>。
+      #
+      # 触发上下文差异（这里曾是一个真实缺陷）：
+      #   * push tag          -> GITHUB_REF=refs/tags/v1.2.3, GITHUB_REF_NAME=v1.2.3
+      #   * workflow_dispatch -> GITHUB_REF=refs/heads/main, GITHUB_REF_NAME=main
+      # 早期实现直接取 GITHUB_REF_NAME，导致手动触发时永远拿分支名去比对，
+      # 必然失败 —— 等于手动入口完全不可用。
+      #
+      # 现在：tag 推送时用真实 tag；手动触发时使用输入参数，留空则按
+      # v<versionName> 推导。两种情况都要求最终 tag 与 versionName 一致，
+      # 因为客户端按 tag 推导资产名（Go_<version>_arm64-v8a_release.apk），
+      # 不一致会让自更新静默失效。
       - name: Assert tag matches versionName
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
           VER=$(grep -oP "versionName\s+'\K[^']+" app/build.gradle | head -n1)
-          echo "tag=${TAG}  versionName=${VER}"
+          if [ -z "${VER}" ]; then
+            echo "::error::无法从 app/build.gradle 解析 versionName"
+            exit 1
+          fi
+
+          case "${GITHUB_REF}" in
+            refs/tags/*)
+              TAG="${GITHUB_REF_NAME}"
+              echo "触发方式：tag 推送"
+              ;;
+            *)
+              TAG="${{ inputs.tag }}"
+              if [ -z "${TAG}" ]; then
+                TAG="v${VER}"
+              fi
+              echo "触发方式：手动（GITHUB_REF_NAME=${GITHUB_REF_NAME} 不可用作版本）"
+              ;;
+          esac
+
+          echo "tag=${TAG}  versionName=${VER}  期望 tag=v${VER}"
           if [ "${TAG}" != "v${VER}" ]; then
             echo "::error::tag (${TAG}) 与 versionName (${VER}) 不一致，应为 v${VER}"
             echo "::error::客户端按 tag 推导资产名，不一致会导致自更新无法匹配"
             exit 1
           fi
           echo "VERSION_NAME=${VER}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=${TAG}" >> "$GITHUB_ENV"
 
       - name: Set up JDK 17
         uses: actions/setup-java@9704b39bf258b59bc04b50fa2dd55e9ed76b47a8 # v4.1.0
@@ -191,6 +224,7 @@ jobs:
           STARTED_ON=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
           APK_NAME="${APK_NAME}" \
           APK_SHA="${APK_SHA}" \
+          RELEASE_TAG="${RELEASE_TAG}" \
           node scripts/gen-provenance.mjs > provenance.json
 
           node -e 'const d=require("./provenance.json"); if(!d.subject?.[0]?.digest?.sha256) { console.error("provenance 结构校验失败"); process.exit(1); } console.log("provenance 结构校验通过");'
