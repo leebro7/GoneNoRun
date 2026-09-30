@@ -1,0 +1,123 @@
+name: Build APK (no secrets)
+
+# 目的：在不需要任何 Secret 的前提下产出可安装的 APK，用于回答两个问题：
+#   1. 本项目能否编译通过（至今从未验证过）
+#   2. 产物能否在设备上安装运行
+#
+# 与 build-release.yml 的分工：
+#   * 本 workflow —— 产出 **debug 签名** APK，仅供测试，绝不用于发布。
+#     Android SDK 会自动生成调试密钥，因此不需要任何 Secret，
+#     fork PR 也能安全运行。
+#   * build-release.yml —— 产出使用**正式发布密钥**签名、可覆盖安装的 APK，
+#     必须经 production Environment 审批并持有签名 Secret。
+#
+# ⚠️ 警告：debug 签名 APK **不能**用于发布。它的签名与正式版本不同，
+#    已安装正式版的用户无法覆盖安装，客户端 UpdateVerifier 也会拒绝它。
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      # 只在可能影响可编译性的路径变更时触发，避免每次改文档都跑一次
+      - 'app/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+      - '.github/workflows/build-apk.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'app/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@9704b39bf258b59bc04b50fa2dd55e9ed76b47a8 # v4.1.0
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Show toolchain versions
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | head -1
+          echo "ANDROID_HOME=${ANDROID_HOME}"
+          ls "${ANDROID_HOME}/build-tools" 2>/dev/null || echo "(no build-tools)"
+          ls "${ANDROID_HOME}/platforms" 2>/dev/null || echo "(no platforms)"
+          ls "${ANDROID_HOME}/ndk" 2>/dev/null || echo "(no ndk)"
+
+      - name: Verify vendored dependencies
+        run: ./gradlew verifyVendoredDependencies
+
+      # 不注入任何 Secret：secrets-gradle-plugin 允许缺省，
+      # 地图功能在无 Key 的构建中不可用，但编译与打包正常。
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: Report APK
+        run: |
+          set -euo pipefail
+          APK=$(find app/build/outputs/apk/debug -name '*.apk' | head -n1)
+          if [ -z "${APK}" ]; then echo "::error::未找到 APK"; exit 1; fi
+          ls -la "$APK"
+          APKSIGNER=$(ls "${ANDROID_HOME}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n1)
+          "${APKSIGNER}" verify --print-certs "$APK" | head -5
+          echo "APK_PATH=${APK}" >> "$GITHUB_ENV"
+          {
+            echo "### Debug APK"
+            echo
+            basename "$APK"
+            echo
+            echo "debug 签名，仅供测试，**不可用于发布**。"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: debug-apk-${{ github.sha }}
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+          if-no-files-found: error
+
+      # 编译失败时给出可直接定位的诊断，而不是只丢一段日志
+      - name: Diagnose on failure
+        if: failure()
+        run: |
+          set +e
+          echo "### 构建失败诊断" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "ANDROID_HOME=${ANDROID_HOME}" >> "$GITHUB_STEP_SUMMARY"
+          ls "${ANDROID_HOME}/build-tools" >> "$GITHUB_STEP_SUMMARY" 2>&1
+          ls "${ANDROID_HOME}/platforms" >> "$GITHUB_STEP_SUMMARY" 2>&1
+          grep -E "compileSdk|buildToolsVersion|ndkVersion|minSdk|targetSdk" app/build.gradle >> "$GITHUB_STEP_SUMMARY" 2>&1
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

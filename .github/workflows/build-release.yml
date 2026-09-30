@@ -30,7 +30,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # 构建并签名。
   #
-  # 该作业持有签名凭据。凭据来自名为 production 的 Environment Secret —— 
+  # 该作业持有签名凭据。凭据来自名为 production 的 Environment Secret ——
   # Environment 提供审批闸门：未获批准时本作业不会启动，凭据也不会被注入。
   # 注意：审批只在发布前发生一次。若把 publish 也绑定同一 Environment，
   # 会要求第二次审批，因此 publish 使用普通仓库 Secret（无需审批）。
