@@ -162,20 +162,34 @@ if [ -n "${RUN_ID}" ]; then
   CONC=$(printf '%s' "${RUNS}" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);const r=(j.workflow_runs||[])[0];console.log((r.conclusion||r.status)+" / "+(r.head_branch||""))}catch(_){console.log("?")}})' 2>/dev/null)
   echo "  -- 最近一次 Build Release: ${CONC}"
 
-  fetch_json "${API}/actions/runs/${RUN_ID}/jobs" | node -e '
+  # 注意：这里的结论由 node 打印为文本，必须同时把「是否失败」回传给 shell，
+  # 否则会出现「报告了 FAIL 却仍显示自检通过」的自相矛盾结果。
+  SIGNING_STATE=$(fetch_json "${API}/actions/runs/${RUN_ID}/jobs" | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   try{
     const j=JSON.parse(s);
     const job=(j.jobs||[]).find(x=>x.name&&x.name.indexOf("Build")===0)||(j.jobs||[])[0];
-    if(!job) return;
+    if(!job){console.log("unknown||");return;}
     const mat=(job.steps||[]).find(st=>/Materialize signing keystore/.test(st.name));
     const fail=(job.steps||[]).find(st=>st.conclusion==="failure");
-    if(mat&&mat.conclusion==="success") console.log("  ok    signing secrets 就位（Materialize signing keystore 成功）");
-    else if(mat&&mat.conclusion==="failure") console.log("  FAIL  签名 Secret 缺失，或未放在 production environment 下");
-    else if(mat&&mat.conclusion==="skipped") console.log("  warn  签名步骤被跳过（上游步骤先失败）");
-    if(fail) console.log("  --    首个失败步骤: "+(fail.number||"")+" "+fail.name);
-  }catch(e){}
-})' 2>/dev/null
+    const failTxt=fail?((fail.number||"")+" "+fail.name):"";
+    let state="unknown";
+    if(mat&&mat.conclusion==="success") state="ok";
+    else if(mat&&mat.conclusion==="failure") state="missing";
+    else if(mat&&mat.conclusion==="skipped") state="skipped";
+    console.log(state+"|"+failTxt);
+  }catch(e){console.log("unknown|")}
+})' 2>/dev/null)
+
+  SIGNING_STATE_ONLY="${SIGNING_STATE%%|*}"
+  FIRST_FAIL="${SIGNING_STATE#*|}"
+  case "${SIGNING_STATE_ONLY}" in
+    ok)      ok "signing secrets 就位（Materialize signing keystore 成功）" ;;
+    missing) bad "签名 Secret 缺失，或未放在 production environment 下" ;;
+    skipped) warn "签名步骤被跳过（上游步骤先失败）" ;;
+    *)       warn "无法判定签名 Secret 状态" ;;
+  esac
+  [ -n "${FIRST_FAIL}" ] && echo "  --    首个失败步骤: ${FIRST_FAIL}"
 else
   warn "尚无 Build Release 运行记录"
 fi
