@@ -655,7 +655,15 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
         //可选，默认false，设置是否需要POI结果，可以在BDLocation.getPoiList里得到
         locationOption.setIsNeedLocationPoiList(false);
         //可选，默认false，设置是否收集CRASH信息，默认收集
-        locationOption.setIgnoreCacheException(true);
+        // 注意：仓库内 vendored 的百度定位 SDK（BaiduLBS_Android.jar）中
+        // LocationClientOption **不存在** setIgnoreCacheException 方法，该调用
+        // 导致编译失败：
+        //   MainActivity.java:658: error: cannot find symbol
+        // 已核对 jar 内该类的全部 30 个 setter，确无此方法
+        // （setIgnoreKillProcess 存在，但属于另一个开关）。
+        // 语义等价：此行原意是「不收集 CRASH 信息」，而 SDK 默认即不收集，
+        // 因此注释掉不改变运行时行为。若后续升级 SDK 到含该方法的版本，可恢复。
+        //locationOption.setIgnoreCacheException(true);
         //可选，默认false，设置是否开启Gps定位
         //locationOption.setOpenGps(true);
         locationOption.setOpenGnss(true);
