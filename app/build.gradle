@@ -131,46 +131,28 @@ android {
 // Gradle 的 dependency locking / verification-metadata 无法覆盖 fileTree()
 // 或 files() 引入的本地二进制，因此对 vendored 依赖单独做 SHA-256 白名单校验。
 // 清单见 app/libs/VENDORED_DEPENDENCIES.sha256
+//
+// 实现说明：这里**委托给 sha256sum**，而不是用 Gradle 自己重算哈希。
+// 早期版本用 MessageDigest + f.bytes 自行计算，结果在 CI 上失败而本地
+// `sha256sum -c` 通过 —— 出现了两套实现、只验证过其中一套的局面。
+// 单一实现（sha256sum）可以在本地如实复现 CI 的行为。
 // ---------------------------------------------------------------------------
-tasks.register('verifyVendoredDependencies') {
+tasks.register('verifyVendoredDependencies', Exec) {
     group = 'verification'
     description = '校验 vendored 二进制依赖（BaiduLBS_Android.jar / *.so）的 SHA-256'
 
-    def libsDir = file('libs')
-    def manifestFile = file('libs/VENDORED_DEPENDENCIES.sha256')
+    workingDir = file('libs')
+    commandLine 'sha256sum', '-c', 'VENDORED_DEPENDENCIES.sha256'
 
+    // 每次都执行：这是完整性校验，不应被 up-to-date 检查跳过
     outputs.upToDateWhen { false }
 
-    doLast {
-        if (!manifestFile.exists()) {
+    doFirst {
+        if (!file('libs/VENDORED_DEPENDENCIES.sha256').exists()) {
             throw new GradleException(
-                "缺少 vendored 依赖校验清单: ${manifestFile}\n" +
+                "缺少 vendored 依赖校验清单: app/libs/VENDORED_DEPENDENCIES.sha256\n" +
                 "请运行 scripts/gen-vendored-checksums.sh 生成后提交。")
         }
-        def expected = [:]
-        manifestFile.eachLine { line ->
-            def trimmed = line.trim()
-            if (trimmed.isEmpty() || trimmed.startsWith('#')) return
-            def parts = trimmed.split(/\s+/, 2)
-            if (parts.length == 2) expected[parts[1].trim()] = parts[0].trim().toLowerCase()
-        }
-        def failures = []
-        expected.each { relPath, wantHash ->
-            def f = new File(libsDir, relPath)
-            if (!f.exists()) {
-                failures << "缺失文件: ${relPath}".toString()
-                return
-            }
-            def actual = java.security.MessageDigest.getInstance('SHA-256')
-                    .digest(f.bytes).encodeHex().toString()
-            if (actual != wantHash) {
-                failures << "哈希不匹配: ${relPath}\n    期望 ${wantHash}\n    实际 ${actual}".toString()
-            }
-        }
-        if (!failures.isEmpty()) {
-            throw new GradleException("vendored 依赖完整性校验失败:\n  - " + failures.join("\n  - "))
-        }
-        logger.lifecycle("vendored 依赖校验通过（${expected.size()} 个文件）")
     }
 }
 
