@@ -1,0 +1,219 @@
+=== git HEAD ===
+bad8b8a3a1a71eccb5d6a973ebc0ba81a36e8397
+
+=== app/libs listing ===
+total 6600
+drwxr-xr-x 3 runner runner    4096 Oct  2 02:58 .
+drwxr-xr-x 4 runner runner    4096 Oct  2 02:58 ..
+-rw-r--r-- 1 runner runner 6740978 Oct  2 02:58 BaiduLBS_Android.jar
+-rw-r--r-- 1 runner runner    1090 Oct  2 02:58 VENDORED_DEPENDENCIES.sha256
+drwxr-xr-x 2 runner runner    4096 Oct  2 02:58 arm64-v8a
+--- arm64-v8a ---
+total 16080
+drwxr-xr-x 2 runner runner     4096 Oct  2 02:58 .
+drwxr-xr-x 3 runner runner     4096 Oct  2 02:58 ..
+-rw-r--r-- 1 runner runner   524848 Oct  2 02:58 libBaiduMapSDK_base_v7_6_5.so
+-rw-r--r-- 1 runner runner 12589368 Oct  2 02:58 libBaiduMapSDK_map_v7_6_5.so
+-rw-r--r-- 1 runner runner  1292440 Oct  2 02:58 libc++_shared.so
+-rw-r--r-- 1 runner runner  1596896 Oct  2 02:58 libindoor.so
+-rw-r--r-- 1 runner runner   359488 Oct  2 02:58 liblocSDK8b.so
+-rw-r--r-- 1 runner runner    84168 Oct  2 02:58 libtiny_magic.so
+
+=== manifest (first 20 lines, cat -A to expose hidden chars) ===
+# vendored M-dM-:M-^LM-hM-?M-^[M-eM-^HM-6M-dM->M-^]M-hM-5M-^V SHA-256 M-gM-^YM-=M-eM-^PM-^MM-eM-^MM-^U$
+# M-gM-^TM-1 scripts/gen-vendored-checksums.sh M-gM-^TM-^_M-fM-^HM-^PM-oM-<M-^LM-hM-/M-7M-eM-^KM-?M-fM-^IM-^KM-eM-7M-%M-gM-<M-^VM-hM->M-^Q$
+# M-fM-^[M-4M-fM-^VM-0M-dM->M-^]M-hM-5M-^VM-fM-^WM-6M-eM-?M-^EM-iM-!M-;M-iM-^GM-^MM-fM-^VM-0M-gM-^TM-^_M-fM-^HM-^PM-eM-9M-6M-eM-^\M-( PR M-dM-8M--M-hM-/M-4M-fM-^XM-^NM-fM-^]M-%M-fM-:M-^PM-dM-8M-^NM-gM-^IM-^HM-fM-^\M-,$
+#$
+# M-eM-7M-2M-gM-^_M-%M-fM-^]M-%M-fM-:M-^PM-oM-<M-^ZM-gM-^YM->M-eM-:M-& LBS Android SDKM-oM-<M-^HBaiduLBS_Android.jar / libBaiduMapSDK_*_v7_6_5.soM-oM-<M-^I$
+# M-fM-3M-(M-fM-^DM-^OM-oM-<M-^ZM-hM-/M-% SDK M-fM-^WM- M-eM-^OM-/M-gM-^TM-(M-gM-^ZM-^DM-eM-^]M-^PM-fM- M-^GM-dM-8M-^NM-gM-^IM-^HM-fM-^\M-,M-fM-8M-^EM-eM-^MM-^UM-oM-<M-^LM-fM-^WM- M-fM-3M-^UM-gM-:M-3M-eM-^EM-% osv-scanner M-gM--M-^I SCA M-eM-7M-%M-eM-^EM-7M-oM-<M-^L$
+#       M-iM-^\M-^@M-dM->M-^]M-hM-5M-^VM-dM-:M-:M-eM-7M-%M-hM-7M-^_M-hM-8M-*M-eM-^EM-6M-eM-.M-^IM-eM-^EM-(M-eM-^EM-,M-eM-^QM-^JM-cM-^@M-^B$
+093c4e2aa59bf818af13ef63a591a47c192b3a0cfaa7868b531410701b240245  BaiduLBS_Android.jar$
+8cc09917a8e333fde2a7d4ebf74e451d0419a09ede1acfe610c659becbe43c62  arm64-v8a/libBaiduMapSDK_base_v7_6_5.so$
+2079d79650202e4d4250697c1f84b3a10ebf9ae7a1be09026187116123923c8c  arm64-v8a/libBaiduMapSDK_map_v7_6_5.so$
+9ee5e2dd1e2b1530257367d49bfbaecfa6d3f79e2f3b67ac956347f58ab000a6  arm64-v8a/libc++_shared.so$
+71e059853664154dc559ced2069eb189fe9ce24ea944e8fc8dcbcaa6d9f22024  arm64-v8a/libindoor.so$
+71da5bf9f1dcae677ec4a3d0d9ad14ea99b5e77a19c025ff23ba6d4e325efcdb  arm64-v8a/liblocSDK8b.so$
+0ef33802c6615a7ee49e1f429270b0e7d2c1a8d02db5282d470454b1e574c383  arm64-v8a/libtiny_magic.so$
+
+=== sha256sum -c (cwd=app/libs) ===
+BaiduLBS_Android.jar: OK
+arm64-v8a/libBaiduMapSDK_base_v7_6_5.so: OK
+arm64-v8a/libBaiduMapSDK_map_v7_6_5.so: OK
+arm64-v8a/libc++_shared.so: OK
+arm64-v8a/libindoor.so: OK
+arm64-v8a/liblocSDK8b.so: OK
+arm64-v8a/libtiny_magic.so: OK
+sha256sum exit=0
+
+=== which sha256sum ===
+/usr/bin/sha256sum
+sha256sum (GNU coreutils) 9.4
+
+=== ANDROID_HOME ===
+ANDROID_HOME=/usr/local/lib/android/sdk
+--- build-tools ---
+34.0.0
+35.0.0
+35.0.1
+36.0.0
+36.1.0
+37.0.0
+--- platforms ---
+android-34
+android-34-ext10
+android-34-ext11
+android-34-ext12
+android-34-ext8
+android-35
+android-35-ext14
+android-35-ext15
+android-36
+android-36-ext18
+android-36-ext19
+android-36.1
+android-37.0
+android-37.1
+android-37.2
+android-37.2-beta1
+android-37.2-beta2
+android-37.2-beta3
+--- ndk ---
+27.3.13750724
+28.2.13676358
+29.0.14206865
+
+
+=== gradle: tasks (configuration-only check) ===
+gradle tasks: OK (configuration phase passes)
+--- last 40 lines ---
+properties - Displays the properties of root project 'GoneNoRun'.
+resolvableConfigurations - Displays the configurations that can be resolved in root project 'GoneNoRun'.
+tasks - Displays the tasks runnable from root project 'GoneNoRun' (some of the displayed tasks may belong to subprojects).
+
+Install tasks
+-------------
+installDebug - Installs the Debug build.
+installDebugAndroidTest - Installs the android (on device) tests for the Debug build.
+uninstallAll - Uninstall all applications.
+uninstallDebug - Uninstalls the Debug build.
+uninstallDebugAndroidTest - Uninstalls the android (on device) tests for the Debug build.
+uninstallRelease - Uninstalls the Release build.
+
+Verification tasks
+------------------
+check - Runs all checks.
+checkJetifier - Checks whether Jetifier is needed for the current project
+connectedAndroidTest - Installs and runs instrumentation tests for all flavors on connected devices.
+connectedCheck - Runs all device checks on currently connected devices.
+connectedDebugAndroidTest - Installs and runs the tests for debug on connected devices.
+deviceAndroidTest - Installs and runs instrumentation tests using all Device Providers.
+deviceCheck - Runs all device checks using Device Providers and Test Servers.
+lint - Runs lint on the default variant.
+lintDebug - Print text output from the corresponding lint report task
+lintFix - Runs lint on the default variant and applies any safe suggestions to the source code.
+lintRelease - Print text output from the corresponding lint report task
+lintVitalRelease - Print text output from the corresponding lint report task
+test - Run unit tests for all variants.
+testDebugUnitTest - Run unit tests for the debug build.
+testReleaseUnitTest - Run unit tests for the release build.
+updateLintBaseline - Updates the lint baseline using the default variant.
+verifyVendoredDependencies - 校验 vendored 二进制依赖（BaiduLBS_Android.jar / *.so）的 SHA-256
+
+To see all tasks and more detail, run gradlew tasks --all
+
+To see more detail about a task, run gradlew help --task <task>
+
+BUILD SUCCESSFUL in 35s
+1 actionable task: 1 executed
+Configuration cache entry stored.
+--- error lines ---
+19:> Task :tasks
+
+=== gradle: verifyVendoredDependencies ===
+gradle verify: OK
+--- last 40 lines ---
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.13/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as no cached configuration is available for tasks: verifyVendoredDependencies
+
+> Task :app:verifyVendoredDependencies
+BaiduLBS_Android.jar: OK
+arm64-v8a/libBaiduMapSDK_base_v7_6_5.so: OK
+arm64-v8a/libBaiduMapSDK_map_v7_6_5.so: OK
+arm64-v8a/libc++_shared.so: OK
+arm64-v8a/libindoor.so: OK
+arm64-v8a/liblocSDK8b.so: OK
+arm64-v8a/libtiny_magic.so: OK
+
+BUILD SUCCESSFUL in 9s
+1 actionable task: 1 executed
+Configuration cache entry stored.
+--- error lines ---
+
+=== gradle: assembleDebug (the real build) ===
+assembleDebug: OK
+-rw-r--r-- 1 runner runner 27672386 Oct  2 03:00 app/build/outputs/apk/debug/Go_1.12.3_arm64-v8a_debug.apk
+--- error lines ---
+33:Unable to strip the following libraries, packaging them as they are: libBaiduMapSDK_base_v7_6_5.so, libBaiduMapSDK_map_v7_6_5.so, libc++_shared.so, libindoor.so, liblocSDK8b.so, libtiny_magic.so. Run with --info option to learn more.
+--- error -> source resolution ---
+--- last 60 lines ---
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/service/ServiceGo.java:240: warning: [deprecation] ACCURACY_FINE in Criteria has been deprecated
+            loc.setAccuracy(Criteria.ACCURACY_FINE);    // 设定此位置的估计水平精度，以米为单位。
+                                    ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/service/ServiceGo.java:281: warning: [deprecation] Criteria in android.location has been deprecated
+                        true, Criteria.POWER_LOW, Criteria.ACCURACY_COARSE);
+                              ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/service/ServiceGo.java:281: warning: [deprecation] POWER_LOW in Criteria has been deprecated
+                        true, Criteria.POWER_LOW, Criteria.ACCURACY_COARSE);
+                                      ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/service/ServiceGo.java:281: warning: [deprecation] Criteria in android.location has been deprecated
+                        true, Criteria.POWER_LOW, Criteria.ACCURACY_COARSE);
+                                                  ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/service/ServiceGo.java:281: warning: [deprecation] ACCURACY_COARSE in Criteria has been deprecated
+                        true, Criteria.POWER_LOW, Criteria.ACCURACY_COARSE);
+                                                          ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/service/ServiceGo.java:295: warning: [deprecation] Criteria in android.location has been deprecated
+            loc.setAccuracy(Criteria.ACCURACY_COARSE);  // 设定此位置的估计水平精度，以米为单位。
+                            ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/service/ServiceGo.java:295: warning: [deprecation] ACCURACY_COARSE in Criteria has been deprecated
+            loc.setAccuracy(Criteria.ACCURACY_COARSE);  // 设定此位置的估计水平精度，以米为单位。
+                                    ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/utils/GoUtils.java:112: warning: [deprecation] Criteria in android.location has been deprecated
+                            false, true, true, true, Criteria.POWER_HIGH, Criteria.ACCURACY_FINE);
+                                                     ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/utils/GoUtils.java:112: warning: [deprecation] POWER_HIGH in Criteria has been deprecated
+                            false, true, true, true, Criteria.POWER_HIGH, Criteria.ACCURACY_FINE);
+                                                             ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/utils/GoUtils.java:112: warning: [deprecation] Criteria in android.location has been deprecated
+                            false, true, true, true, Criteria.POWER_HIGH, Criteria.ACCURACY_FINE);
+                                                                          ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/utils/GoUtils.java:112: warning: [deprecation] ACCURACY_FINE in Criteria has been deprecated
+                            false, true, true, true, Criteria.POWER_HIGH, Criteria.ACCURACY_FINE);
+                                                                                  ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/gogogo/HistoryActivity.java:62: warning: [deprecation] setStatusBarColor(int) in Window has been deprecated
+        getWindow().setStatusBarColor(getResources().getColor(R.color.colorPrimary, this.getTheme()));
+                   ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/gogogo/UpdateVerifier.java:62: warning: [deprecation] GET_SIGNATURES in PackageManager has been deprecated
+                : PackageManager.GET_SIGNATURES;
+                                ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/gogogo/UpdateVerifier.java:104: warning: [deprecation] signatures in PackageInfo has been deprecated
+                signers = info.signatures;
+                              ^
+/home/runner/work/GoneNoRun/GoneNoRun/app/src/main/java/com/zcshou/gogogo/SettingsActivity.java:19: warning: [deprecation] setStatusBarColor(int) in Window has been deprecated
+        getWindow().setStatusBarColor(getResources().getColor(R.color.colorPrimary, this.getTheme()));
+                   ^
+20 warnings
+
+> Task :app:dexBuilderDebug
+> Task :app:mergeProjectDexDebug
+> Task :app:desugarDebugFileDependencies
+> Task :app:mergeExtDexDebug
+> Task :app:packageDebug
+> Task :app:assembleDebug
+> Task :app:createDebugApkListingFileRedirect
+
+[Incubating] Problems report is available at: file:///home/runner/work/GoneNoRun/GoneNoRun/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 1m 9s
+34 actionable tasks: 34 executed
+Configuration cache entry stored.
