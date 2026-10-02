@@ -4,104 +4,166 @@
 
 <div align="center">
 
-[![GitHub stars](https://img.shields.io/github/stars/ZCShou/GoGoGo?logo=github)](https://github.com/ZCShou/GoGoGo/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/ZCShou/GoGoGo?logo=github)](https://github.com/ZCShou/GoGoGo/network)
-[![license](https://img.shields.io/github/license/ZCShou/GoGoGo)](https://github.com/ZCShou/GoGoGo/blob/master/LICENSE)
-[![GitHub Release](https://img.shields.io/github/v/release/ZCShou/GoGoGo?label=Release)](https://github.com/ZCShou/GoGoGo/releases)
-[![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
-</div>
-<div align="center">
+[![license](https://img.shields.io/github/license/leebro7/GoneNoRun)](https://github.com/leebro7/GoneNoRun/blob/main/LICENSE)
+[![Build APK](https://github.com/leebro7/GoneNoRun/actions/workflows/build-apk.yml/badge.svg)](https://github.com/leebro7/GoneNoRun/actions/workflows/build-apk.yml)
+[![Security Gate](https://github.com/leebro7/GoneNoRun/actions/workflows/security-gate.yml/badge.svg)](https://github.com/leebro7/GoneNoRun/actions/workflows/security-gate.yml)
+[![CodeQL](https://github.com/leebro7/GoneNoRun/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/leebro7/GoneNoRun/actions/workflows/codeql-analysis.yml)
 
-[![Build Check](https://github.com/ZCShou/GoGoGo/actions/workflows/build-check.yml/badge.svg)](https://github.com/ZCShou/GoGoGo/actions/workflows/build-check.yml)
-[![CodeQL](https://github.com/ZCShou/GoGoGo/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/ZCShou/GoGoGo/actions/workflows/codeql-analysis.yml)
 </div>
 
 <div align="center">
 影梭 - 用于 Android 8.0+ 的无需 ROOT 权限的虚拟定位 APP
+<br/>
+<b>本仓库是「安全加固基线」，派生自上游 <a href="https://github.com/ZCShou/GoGoGo">ZCShou/GoGoGo</a>，不是上游发行版</b>
 </div>
 
-## 简介
-&emsp;&emsp;影梭是一个基于 Android 调试 API + 百度地图及定位 SDK 实现的安卓定位修改工具，并且同时实现了一个可以自由控制移动的摇杆。使用影梭，不需要 ROOT 权限就可以随意修改自己的当前位置以及模拟移动。
+---
 
-1. 源码仓库：[Github](https://github.com/ZCShou/GoGoGo)（推荐）、[Gitee](https://gitee.com/itexp/gogogo)（镜像）
-2. 下载地址：[Github](https://github.com/ZCShou/GoGoGo/releases)（推荐）、[Gitee](https://gitee.com/itexp/gogogo/releases)（镜像）
+## 这个仓库是什么
 
-## 警告一
-&emsp;&emsp;**最近，有网友直接白嫖影梭后改名为标枪定位，然后添加广告（除了加广告，功能没有任何改变），但是，没有按照 GPLv3 协议的要求进行开源（我已经联系过该网友进了提醒，但并没有收到回复），在此提醒：**
-1. **开源 ≠ 白嫖，请遵循开源协议**
-2. **GPL 的法律效力在国内相关诉讼案例很多，请自行搜索，权衡利弊。影梭保留追究相关侵权人员法律责任的所有权利！**
-3. **开源不易，且行且珍惜**
+影梭是一个基于 Android 调试 API + 百度地图/定位 SDK 实现的安卓定位修改工具，同时带一个可自由控制移动的摇杆。
 
-## 警告二
-&emsp;&emsp;**最近，有很多人将影梭用在校园运动类 APP（包括但不限于闪动校园、TakeTwo、运动世界校园等）中作弊，开发者也收到了很多人提问为何影梭定位并不起作用或者寻求对影梭的改进，在此提醒：**
-1. **影梭不支持任何校园运动类 APP 的作弊行为**
-2. **影梭开发者也不赞同采用任何形式在校园运动中作弊**
+本仓库是它的**安全加固版本**：功能与上游一致，但修复了历史版本中一批高危缺陷，并把安全控制固化成可回归的门禁。功能说明、截图与使用体验请以上游为准。
 
-## 背景
-&emsp;&emsp;之前在玩一款 VR 游戏：一起来捉妖。为了省事，就想有没有可以更改位置的 APP。经过一番摸索发现确实有不少可以修改位置的 APP。但是，绝大多数这种 APP 都是收费的，而且贼贵！
+### 为什么必须另起一个仓库
 
-&emsp;&emsp;我比较感兴趣的是这样的技术是如何实现的，因此，决定研究研究自己写一个！现在游戏已经弃坑了，但是技术不能丢。因此，将研究结果开源出来方便大家一起学习！但是请注意（重要的事情说三遍！否则后果自负）：
+历史版本存在一个决定性缺陷：**Android 发布签名私钥被公开提交，且口令硬编码在构建脚本里。**
 
-1. 该 APP 仅仅是为了学习 Android + 百度地图的实现方法，请勿用于游戏作弊！
-2. 该 APP 仅仅是为了学习 Android + 百度地图的实现方法，请勿用于游戏作弊！
-3. 该 APP 仅仅是为了学习 Android + 百度地图的实现方法，请勿用于游戏作弊！
+| 项 | 历史事实 |
+|---|---|
+| 密钥库 | `keystore/GoGoGo.jks`，2022-06-18 入库（commit `bf70ec1`）后从未移除 |
+| 口令 | `app/build.gradle` 明文写死 `storePassword 'GoGoGo'` |
+| `.gitignore` | `*.jks` 规则被**注释掉**，等于主动放行 |
+| 旧证书 SHA-256 | `6eec4ddd865b85482bd5a97ef4ceaa14dded5c3a6cdcbffd4eccb78c54eff081` |
 
-## 功能
-1. 定位修改
-2. 摇杆控制移动
-3. 历史记录
-4. 位置搜索
-5. 直接输入坐标
+Android 以 APK 的签名证书作为更新信任锚。**持有该私钥的任何人都能签发一个被存量用户设备当作合法更新接受的 APK** —— 不需要破解、不需要仓库写权限、不需要任何凭据，因为仓库是公开的、口令就写在旁边。
 
-## 截图
-![joystick.jpg](./docs/images/joystick.jpg)
-![search_history.jpg](./docs/images/search_history.jpg)
-![map.jpg](./docs/images/map.jpg)
+> 第一性原理：一个已经公开过的私钥，不能通过任何配置修复重新变得可信。
+> 因此本仓库**不复用**旧签名身份，改用全新密钥库；旧证书一律视为作废。
 
-## 用法
-1. 下载 APK 直接安装
-2. 启动影梭，赋予相关权限
-3. 单击地图位置，然后点击启动按钮
+### 与上游的差异（加固摘要）
 
-## 文档
-&emsp;&emsp;由于本人并不是做移动开发的，很多功能代码写的都比较差。我也第一次写  Android APP，目前还处在学习中。。。此外，就一个简单的 APP，应该也不需要啥文档，开发过程中遇到的一些问题，我一般都会记录在个人博客中，具体参见：https://blog.csdn.net/zcshoucsdn/category_10559121.html
+| 领域 | 控制 |
+|---|---|
+| 签名与密钥 | 密钥材料不入库（`*.jks/*.p12/*.pem/*.key`、`keystore/`、`.signing/`）；构建脚本无明文凭据（env → `keystore.properties`）；凭据缺失时**不签名而非失败**，使 fork PR 无需凭据也能校验；发布凭据绑定 `environment: production` 人工审批；由 Gradle **单次**完成签名 |
+| CI/CD 供应链 | 全部 Action 固定 commit SHA；顶层 `permissions: contents: read`，写权限仅下沉到 `publish` 作业；禁止 `pull_request_target`；发布只由 `tags: ['v*']` 触发；PR 构建不接触任何 Secret；vendored 二进制有独立 SHA-256 清单 |
+| 应用运行时 | 权限最小化（移除 11 项多余/特权声明）；默认禁止明文流量；关闭备份与设备迁移；FileProvider 收窄到 `Logs/`、`Updates/`；日志移入应用内部存储；修复失效的「关闭日志」开关 |
+| 自更新链路 | `UpdateVerifier`：SHA-256 + APK 签名证书**双重校验**，任一失败即中止；资产按文件名精确匹配（不再取 `assets[0]`）；拒绝路径穿越；仅接受 HTTPS |
+| 门禁 | `Security Gate` 复合 Action：工作流策略 R1–R8、全历史密钥扫描、未导入符号、XML 结构、vendored 校验和、应用不变量（含「运行时申请的权限必须已在清单声明」） |
 
-&emsp;&emsp;如果有疑问可以直接搜索 ISSUE 或者 在上面直接提交问题。
+细节、证据与红线清单见 [`docs/SECURITY-HARDENING.md`](docs/SECURITY-HARDENING.md)；审计发现逐条对照见 [`docs/AUDIT-REMEDIATION.md`](docs/AUDIT-REMEDIATION.md)。
 
-## 参考
-&emsp;&emsp;由于本人也是个新手，纯属业余瞎搞，因此，在写影梭的过程中，参考了很多网友分享的技术文章、示例代码等。包括但不限于以下列出的几个：
-1. https://github.com/Hilaver/MockGPS
-2. https://github.com/bxxfighting/together-go
-3. https://github.com/P72B/Mocklation
+---
 
-&emsp;&emsp;还有些 CSDN 上的文章，目前不记得地址了，如果您发现其中有直接引用或借鉴您的地方，请与我联系，我会再第一时间进行处理，谢谢！
+## 构建
 
-## FAQ
-Q：为何不支持 Android 8.0 以下版本？
+需要 **JDK 17** 与 **Android SDK**（`compileSdk 36` / `buildToolsVersion 36.0.0`）。
 
-A：因为手里没有机器无法进行适配。。。
+```bash
+# 调试包（使用 Android SDK 自动生成的调试密钥，无需任何凭据）
+./gradlew assembleDebug
 
-Q：为何定位不是很稳定，偶尔会飘回真实位置？
+# 发布包（需要签名凭据；缺省时该变体不签名而非报错）
+export GOGOGO_KEYSTORE_FILE=/path/to/release.p12
+export GOGOGO_KEYSTORE_PASSWORD='<强口令>'
+export GOGOGO_KEY_PASSWORD='<与上面相同>'
+export GOGOGO_KEY_ALIAS=gogogo-release
+./gradlew assembleRelease
+```
 
-A：这是是由于实现原理导致的，Android 调试 API 固有的问题。确切的说，应该是由于手机本身还开启了其他定位方式（例如，基站定位、wifi定位等）导致的
+生成新的发布签名身份（口令不落盘、私钥不入库）：
 
-Q：是否支持鸿蒙系统？
+```bash
+GOGOGO_KEYSTORE_PASSWORD='<强口令>' ./scripts/generate-signing-key.sh
+```
 
-A：经过测试，影梭可以在鸿蒙系统上正常运行。
+### CI
 
-Q：为何在微信等腾讯系应用上定位不起作用？
+| 工作流 | 作用 |
+|---|---|
+| `Build APK (no secrets)` | 每次推送/PR 执行 `assembleDebug` 并上传产物，全程不接触任何 Secret |
+| `Security Gate` | 策略、密钥、供应链与应用不变量的一票否决门禁 |
+| `Build Check` / `CodeQL` | 静态检查与代码扫描 |
+| `Build & Release` | 仅 `v*` tag 触发，需 `production` 环境审批 |
 
-A：建议去问一下腾讯。
+发布流程（Environment 审批、单次签名、发布前指纹核对）见 [`docs/RELEASE-PROCESS.md`](docs/RELEASE-PROCESS.md)。
 
-Q：编译时 java 报错？
+---
 
-A：Gradle 使用的 java 版本与 Android Studio 使用的不一致。Gradle 默认会在环境变量中搜索 JAVA_HOME 来确定 Java 位置。
+## 安装与权限
 
-## 如何贡献
-1. FORK -> PR
-2. 加入影梭开发，共同完善
+```bash
+adb install -r Go_x.y.z_arm64-v8a_release.apk
+```
+
+1. 安装后启动影梭，同意协议；
+2. 授予**定位权限**（精确或大致均可；应用不会因权限被拒而把你挡在门外，只会降级地图定位）；
+3. 到 **开发者选项 → 选择模拟位置信息应用** 中选中影梭 —— 这是模拟定位的真正授权入口，`ACCESS_MOCK_LOCATION` 不会出现在运行时授权弹框里；
+4. 单击地图选点，点击启动。
+
+| 权限 | 用途 |
+|---|---|
+| `ACCESS_FINE/COARSE_LOCATION` | 地图定位图层 |
+| `ACCESS_MOCK_LOCATION` | 注册模拟位置提供者（**由开发者选项授权**） |
+| `SYSTEM_ALERT_WINDOW` | 摇杆悬浮窗 |
+| `FOREGROUND_SERVICE` / `POST_NOTIFICATIONS` | 持续模拟定位与常驻通知 |
+| `REQUEST_INSTALL_PACKAGES` | 应用内自更新 |
+| `INTERNET` / `ACCESS_WIFI_STATE` / `ACCESS_NETWORK_STATE` | 地图、逆地理编码、更新检查 |
+
+`ACCESS_BACKGROUND_LOCATION`、`READ_LOGS`、`READ_PHONE_STATE`、`WRITE_SETTINGS`、外部存储读写等**已全部移除**。
+
+---
+
+## 签名身份与校验
+
+本仓库的发布包使用**全新**签名证书（旧证书已作废）：
+
+| 项 | 值 |
+|---|---|
+| DN | `CN=GoGoGo_Release, O=GoGoGo, C=CN` |
+| 证书 SHA-256 | `84:9C:20:2C:7B:0B:24:C2:1C:78:A2:33:0E:45:73:99:C2:B6:A3:A7:79:E0:A2:5D:20:E7:DA:0A:CF:89:85:5E` |
+| SPKI SHA-256 | `ZIXuS0qHV1ZBk/hGrnazUWKdHEC5YzbR/Gc39uO+P0w=` |
+| 密钥库参数 | PKCS#12 / RSA-4096 / PBES2-AES-256-CBC / SHA-256 MAC，有效期 30 年 |
+
+核对你手上的 APK 是否由该身份签署：
+
+```bash
+apksigner verify --print-certs your.apk | grep 'certificate SHA-256'
+```
+
+**若指纹是 `6eec4ddd…`（旧证书），请视为可疑制品并丢弃。**
+
+---
+
+## 已知限制与尚未验证
+
+诚实优先：以下事项**尚未**由本仓库验证，不要当成已完成。
+
+| # | 事项 | 说明 |
+|---|---|---|
+| 1 | 真机回归 | 模拟定位实际生效、摇杆悬浮窗、百度 SDK 在「默认禁止明文流量」下能否工作、自更新全链路，均需真机验证 |
+| 2 | 存量用户不在保护范围 | 新签名身份与旧包名 `com.zcshou.gogogo` 的关系尚未决定（改用新包名重装，或走 Android 密钥轮换），需维护者决策 |
+| 3 | 应用内更新通道 | `MainActivity` 仍查询上游 `zcshou/gogogo` 的 Release；证书校验按设计会拒绝非本签名制品，因此**在改为本仓库地址前，应用内自动更新等于关闭**（失败方向是安全的） |
+| 4 | 来源证明强度 | `provenance.json` 由发布签名密钥自身签署，属同一信任根自证，**不等于** Sigstore keyless 或独立 KMS 身份 |
+| 5 | 依赖元数据 | `verification-metadata.xml` / `gradle.lockfile` 尚未生成 |
+| 6 | 平台侧配置 | 分支保护、Environment 审批人、CODEOWNERS 的生效状态属 GitHub 侧设置 |
+
+---
+
+## 参考与致谢
+
+上游作者与项目：[ZCShou/GoGoGo](https://github.com/ZCShou/GoGoGo)。上游 README 提到的参考实现（[MockGPS](https://github.com/Hilaver/MockGPS)、[together-go](https://github.com/bxxfighting/together-go)、[Mocklation](https://github.com/P72B/Mocklation)）同样在此致谢。
+
+### 上游作者的声明（原意保留）
+
+上游作者明确声明：本应用**仅用于学习 Android + 百度地图的实现方式**，不赞同也不支持将其用于游戏或校园运动类应用的作弊行为；对未遵守 GPLv3 协议进行再分发、改名加广告等行为保留追究权利。
+
+### 免责声明
+
+本项目仅供学习与研究使用。使用者应自行承担因使用本软件产生的一切后果；请勿用于任何违反法律法规或服务条款的场景。
+
+---
 
 ## 许可证
-GPL-3.0-only © ZCShou
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZCShou%2FGoGoGo.svg?type=large&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2FZCShou%2FGoGoGo?ref=badge_large&issueType=license)
+GPL-3.0-only © ZCShou（上游）。本仓库的加固改动同样以 **GPL-3.0-only** 发布，衍生自上游项目。
